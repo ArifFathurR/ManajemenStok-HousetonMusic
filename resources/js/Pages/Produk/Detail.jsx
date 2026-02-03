@@ -1,6 +1,6 @@
 import GeneralLayout from "@/Layouts/GeneralLayout";
-import { Head, Link } from "@inertiajs/react";
-import { useState } from "react";
+import { Head, Link, usePage } from "@inertiajs/react";
+import { useState, useEffect } from "react";
 import {
     ArrowLeftIcon,
     PencilSquareIcon,
@@ -8,11 +8,40 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function ProductDetail({ produk }) {
+    // Ambil URL dari Inertia agar Reaktif
+    const { url } = usePage();
+
     // 1. State Varian
     const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
     // 2. State Gambar Preview
     const [previewImage, setPreviewImage] = useState(produk.image_url);
+
+    // 3. EFFECT: Mendeteksi URL Parameter (variant_id) setiap kali halaman dimuat/berubah
+    useEffect(() => {
+        const queryParams = new URLSearchParams(window.location.search);
+        const variantIdFromUrl = queryParams.get("variant_id");
+
+        if (variantIdFromUrl && produk.varians.length > 0) {
+            // Cari index varian yang cocok dengan ID di URL
+            const foundIndex = produk.varians.findIndex(
+                (v) => v.id == variantIdFromUrl
+            );
+
+            if (foundIndex !== -1) {
+                // Set Index Varian
+                setSelectedVariantIndex(foundIndex);
+
+                // PENTING: Set Gambar Preview sesuai varian tersebut
+                const variantImg = produk.varians[foundIndex].gambar_url || produk.image_url;
+                setPreviewImage(variantImg);
+            }
+        } else {
+            // Jika tidak ada parameter variant_id, reset ke default
+            setSelectedVariantIndex(0);
+            setPreviewImage(produk.image_url);
+        }
+    }, [url, produk]);
 
     const variants = produk.varians || [];
     const activeVariant = variants[selectedVariantIndex] || {};
@@ -53,16 +82,15 @@ export default function ProductDetail({ produk }) {
                     </Link>
                     <div>
                         <h1 className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
-                            Product Details
+                            Detail Produk
                         </h1>
                         <p className="text-xs sm:text-sm text-gray-500 mt-0.5 line-clamp-1">
-                            Detailed information about your inventory.
+                            Informasi lengkap mengenai produk Anda.
                         </p>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:gap-3">
-                    {/* FIX: Gunakan Link sebagai container utama, bukan button */}
                     <Link
                         href={route("produk.edit", produk.id)}
                         className="inline-flex items-center justify-center py-2.5 px-3 sm:px-4 border border-gray-200 bg-white rounded-xl text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition shadow-sm"
@@ -70,9 +98,8 @@ export default function ProductDetail({ produk }) {
                         <PencilSquareIcon className="w-4 h-4 mr-1.5 sm:mr-2" />
                         <span>Edit</span>
                     </Link>
-
                     <button className="inline-flex items-center justify-center py-2.5 px-3 sm:px-6 bg-gray-900 rounded-xl text-xs sm:text-sm font-medium text-white hover:bg-gray-800 transition shadow-lg shadow-gray-200">
-                        Add Stock
+                        Tambah Stok
                     </button>
                 </div>
             </div>
@@ -82,12 +109,12 @@ export default function ProductDetail({ produk }) {
                 <div className="lg:col-span-1">
                     <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-gray-100 h-full">
                         <h2 className="font-bold text-gray-900 mb-1">
-                            Product Image
+                            Foto Produk
                         </h2>
                         <p className="text-xs sm:text-sm text-gray-500 mb-5 sm:mb-6">
                             {previewImage === produk.image_url
-                                ? "Main product image."
-                                : `Variant: ${activeVariant.nama_varian}`}
+                                ? "Foto utama produk."
+                                : `Varian: ${activeVariant.nama_varian}`}
                         </p>
 
                         {/* PREVIEW GAMBAR BESAR */}
@@ -95,17 +122,17 @@ export default function ProductDetail({ produk }) {
                             {previewImage ? (
                                 <img
                                     src={previewImage}
-                                    alt="Product Preview"
+                                    alt="Pratinjau Produk"
                                     className={`w-full h-full object-contain p-4 mix-blend-multiply transition-transform duration-300 group-hover:scale-105 ${activeVariant.stok === 0 ? "grayscale opacity-75" : ""}`}
                                 />
                             ) : (
                                 <PhotoIcon className="h-20 w-20 text-gray-300" />
                             )}
 
-                            {/* === ALERT STOK HABIS (Hanya muncul jika varian aktif stoknya 0) === */}
+                            {/* === ALERT STOK HABIS === */}
                             {activeVariant.stok === 0 && (
                                 <div className="absolute top-3 right-3">
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm animate-pulse">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm">
                                         Stok Habis
                                     </span>
                                 </div>
@@ -131,12 +158,12 @@ export default function ProductDetail({ produk }) {
                                             ? "border-indigo-600 ring-1 ring-indigo-600 bg-white"
                                             : "border-transparent hover:border-gray-300"
                                     }`}
-                                    title="Main Image"
+                                    title="Foto Utama"
                                 >
                                     {produk.image_url ? (
                                         <img
                                             src={produk.image_url}
-                                            alt="Main"
+                                            alt="Utama"
                                             className="w-full h-full object-contain mix-blend-multiply"
                                         />
                                     ) : (
@@ -149,16 +176,12 @@ export default function ProductDetail({ produk }) {
                                 {/* 2. THUMBNAIL VARIAN */}
                                 {variants.map((variant, index) => {
                                     const thumbImage = variant.gambar_url;
-                                    const isSelected =
-                                        selectedVariantIndex === index &&
-                                        previewImage !== produk.image_url;
+                                    const isSelected = selectedVariantIndex === index && previewImage !== produk.image_url;
 
                                     return (
                                         <button
                                             key={variant.id}
-                                            onClick={() =>
-                                                handleVariantClick(index)
-                                            }
+                                            onClick={() => handleVariantClick(index)}
                                             className={`aspect-square rounded-xl overflow-hidden border transition-all p-1 bg-gray-50 relative ${
                                                 isSelected
                                                     ? "border-indigo-600 ring-1 ring-indigo-600 bg-white"
@@ -166,12 +189,10 @@ export default function ProductDetail({ produk }) {
                                             }`}
                                             title={variant.nama_varian}
                                         >
-                                            {/* === ICON WARNING DI THUMBNAIL (JIKA STOK 0) === */}
+                                            {/* Warning Stok 0 */}
                                             {variant.stok === 0 && (
                                                 <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10">
-                                                    <span className="text-sm font-bold drop-shadow-sm">
-                                                        ⚠️
-                                                    </span>
+                                                    <span className="text-sm font-bold drop-shadow-sm">⚠️</span>
                                                 </div>
                                             )}
 
@@ -184,9 +205,7 @@ export default function ProductDetail({ produk }) {
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100">
                                                     <span className="text-[10px] font-bold">
-                                                        {variant.nama_varian
-                                                            .substring(0, 2)
-                                                            .toUpperCase()}
+                                                        {variant.nama_varian.substring(0, 2).toUpperCase()}
                                                     </span>
                                                 </div>
                                             )}
@@ -202,17 +221,17 @@ export default function ProductDetail({ produk }) {
                 <div className="lg:col-span-2">
                     <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-gray-100 h-full">
                         <h2 className="font-bold text-gray-900 mb-1">
-                            Product Detail
+                            Rincian Produk
                         </h2>
                         <p className="text-xs sm:text-sm text-gray-500 mb-6 sm:mb-8">
-                            Set your product information.
+                            Informasi lengkap produk ini.
                         </p>
 
                         <div className="space-y-6 sm:space-y-8">
                             {/* Product Name */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-                                    Product Name
+                                    Nama Produk
                                 </label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
                                     {produk.nama_produk}
@@ -222,34 +241,21 @@ export default function ProductDetail({ produk }) {
                             {/* Description */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-                                    Description
+                                    Deskripsi
                                 </label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-600 text-sm leading-relaxed min-h-[100px] sm:min-h-[120px] shadow-sm">
-                                    {produk.deskripsi || "No description."}
+                                    {produk.deskripsi || "Tidak ada deskripsi."}
                                 </div>
                             </div>
 
                             {/* Categories */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-                                    Categories
+                                    Kategori
                                 </label>
                                 <div className="relative">
                                     <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm flex items-center justify-between shadow-sm">
                                         <span>{produk.kategori || "-"}</span>
-                                        <svg
-                                            className="w-4 h-4 text-gray-400"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth="2"
-                                                d="M19 9l-7 7-7-7"
-                                            />
-                                        </svg>
                                     </div>
                                 </div>
                             </div>
@@ -257,7 +263,7 @@ export default function ProductDetail({ produk }) {
                             {/* Pricing Section */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-                                    Pricing{" "}
+                                    Harga{" "}
                                     {variants.length > 1 && (
                                         <span className="text-indigo-600 text-xs font-normal ml-1">
                                             ({activeVariant.nama_varian})
@@ -270,9 +276,7 @@ export default function ProductDetail({ produk }) {
                                             Harga Online
                                         </span>
                                         <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm font-medium shadow-sm">
-                                            {formatRupiah(
-                                                activeVariant.harga_online,
-                                            )}
+                                            {formatRupiah(activeVariant.harga_online)}
                                         </div>
                                     </div>
                                     <div className="space-y-1">
@@ -280,9 +284,7 @@ export default function ProductDetail({ produk }) {
                                             Harga Offline
                                         </span>
                                         <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm font-medium shadow-sm">
-                                            {formatRupiah(
-                                                activeVariant.harga_offline,
-                                            )}
+                                            {formatRupiah(activeVariant.harga_offline)}
                                         </div>
                                     </div>
                                 </div>
@@ -291,38 +293,18 @@ export default function ProductDetail({ produk }) {
                             {/* Stock Availability Section */}
                             <div className="pt-2">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-                                    Stock Availability
+                                    Ketersediaan Stok
                                 </label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm flex items-center justify-between shadow-sm">
                                     <span className="flex items-center gap-2.5">
-                                        <span
-                                            className={`w-2.5 h-2.5 rounded-full ${activeVariant.stok > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" : "bg-red-500"}`}
-                                        ></span>
+                                        <span className={`w-2.5 h-2.5 rounded-full ${activeVariant.stok > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" : "bg-red-500"}`}></span>
                                         <span className="font-medium">
                                             {activeVariant.stok} {produk.satuan}
                                         </span>
-                                        <span
-                                            className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md ${activeVariant.stok > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}
-                                        >
-                                            {activeVariant.stok > 0
-                                                ? "Available"
-                                                : "Out of Stock"}
+                                        <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md ${activeVariant.stok > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                                            {activeVariant.stok > 0 ? "Tersedia" : "Stok Habis"}
                                         </span>
                                     </span>
-
-                                    <svg
-                                        className="w-4 h-4 text-gray-400"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth="2"
-                                            d="M19 9l-7 7-7-7"
-                                        />
-                                    </svg>
                                 </div>
                             </div>
                         </div>

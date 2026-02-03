@@ -1,10 +1,10 @@
 import GeneralLayout from '@/Layouts/GeneralLayout';
-import { Head, Link, usePage, router } from '@inertiajs/react'; // Import router
+import { Head, Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
     PlusIcon, MagnifyingGlassIcon, PhotoIcon, ArrowsUpDownIcon,
-    EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon // Import Icons baru
+    EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon
 } from '@heroicons/react/24/outline';
 
 export default function ProdukIndex({ produk }) {
@@ -28,14 +28,11 @@ export default function ProdukIndex({ produk }) {
     const [localProduk, setLocalProduk] = useState(produk);
     const [sortOrder, setSortOrder] = useState('asc');
     const [searchQuery, setSearchQuery] = useState('');
-
-    // 3. State untuk Menu Titik Tiga (Dropdown)
     const [openMenuId, setOpenMenuId] = useState(null);
 
     // Menutup menu jika klik di luar area menu
     useEffect(() => {
         const handleClickOutside = (event) => {
-            // Jika yang diklik bukan bagian dari tombol menu, tutup semua menu
             if (!event.target.closest('.product-menu-btn')) {
                 setOpenMenuId(null);
             }
@@ -66,24 +63,25 @@ export default function ProdukIndex({ produk }) {
 
     // Function: Handle Toggle Menu
     const toggleMenu = (e, id) => {
-        e.preventDefault(); // Mencegah Link card tereksekusi
-        e.stopPropagation(); // Mencegah event bubbling
+        e.preventDefault();
+        e.stopPropagation();
         setOpenMenuId(openMenuId === id ? null : id);
     };
 
     // Function: Handle Delete
     const handleDelete = (e, id) => {
         e.preventDefault();
-        setOpenMenuId(null); // Tutup menu
+        setOpenMenuId(null);
 
         Swal.fire({
-            title: 'Are you sure?',
+            title: 'Apakah Anda yakin?',
             text: "Data produk akan dihapus permanen!",
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#1f2937', // gray-900
+            confirmButtonColor: '#1f2937',
             cancelButtonColor: '#d33',
-            confirmButtonText: 'Yes, delete it!'
+            confirmButtonText: 'Ya, hapus!',
+            cancelButtonText: 'Batal'
         }).then((result) => {
             if (result.isConfirmed) {
                 router.delete(route('produk.destroy', id), {
@@ -102,9 +100,9 @@ export default function ProdukIndex({ produk }) {
             {/* HEADER SECTION */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 sm:mb-8">
                 <div>
-                    <h1 className="text-lg sm:text-xl font-bold text-gray-900">Product Catalog</h1>
+                    <h1 className="text-lg sm:text-xl font-bold text-gray-900">Katalog Produk</h1>
                     <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                        Inventory sorted by: <span className="font-semibold text-indigo-600">{sortOrder === 'asc' ? 'Lowest Stock' : 'Highest Stock'}</span>
+                        Urutan stok berdasarkan: <span className="font-semibold text-indigo-600">{sortOrder === 'asc' ? 'Stok Terkecil' : 'Stok Terbesar'}</span>
                     </p>
                 </div>
 
@@ -116,7 +114,7 @@ export default function ProdukIndex({ produk }) {
                         </div>
                         <input
                             type="text"
-                            placeholder="Search product..."
+                            placeholder="Cari produk..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="block w-full md:w-56 rounded-xl border-gray-200 bg-white py-2 sm:py-2.5 pl-9 sm:pl-10 pr-4 text-sm text-gray-900 focus:ring-indigo-500 transition-all focus:w-full md:focus:w-64"
@@ -126,13 +124,13 @@ export default function ProdukIndex({ produk }) {
                     {/* Sort Button */}
                     <button onClick={toggleSort} className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 border rounded-xl text-sm font-medium transition shadow-sm shrink-0 ${sortOrder === 'asc' ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-gray-200 text-gray-700'}`}>
                         <ArrowsUpDownIcon className="w-5 h-5 sm:mr-2" />
-                        <span className="hidden sm:inline">{sortOrder === 'asc' ? 'Low Stock' : 'High Stock'}</span>
+                        <span className="hidden sm:inline">{sortOrder === 'asc' ? 'Stok Terkecil' : 'Stok Terbesar'}</span>
                     </button>
 
                     {/* Add Button */}
                     <Link href={route('produk.create')} className="inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 bg-gray-900 rounded-xl text-sm font-medium text-white hover:bg-gray-800 transition shadow-lg shadow-gray-200 shrink-0">
                         <PlusIcon className="w-5 h-5 sm:mr-2" />
-                        <span className="hidden sm:inline">Add</span>
+                        <span className="hidden sm:inline">Tambah</span>
                     </Link>
                 </div>
             </div>
@@ -143,7 +141,7 @@ export default function ProdukIndex({ produk }) {
                     {localProduk.map((item) => (
                         <div key={item.id} className="relative group bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full">
 
-                            {/* Link Pembungkus Utama - Kita jadikan div relative agar menu bisa di klik */}
+                            {/* Link Pembungkus Utama */}
                             <Link href={route('produk.show', item.id)} className="flex flex-col h-full w-full">
 
                                 {/* IMAGE WRAPPER */}
@@ -161,7 +159,7 @@ export default function ProdukIndex({ produk }) {
                                             {item.stok > 0 ? `${item.stok} ${item.satuan || 'Pcs'}` : 'Habis'}
                                         </span>
                                         {item.ada_varian_habis && item.stok > 0 && (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-orange-100 text-orange-700 border border-orange-200 shadow-sm animate-pulse">
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-orange-100 text-orange-700 border border-orange-200 shadow-sm">
                                                 ⚠️ Varian Habis
                                             </span>
                                         )}
@@ -171,16 +169,16 @@ export default function ProdukIndex({ produk }) {
                                 {/* PRODUCT INFO */}
                                 <div className="p-3 sm:p-4 flex flex-col flex-1 justify-between">
                                     <div>
-                                        <div className="text-[10px] sm:text-xs font-medium text-indigo-600 mb-0.5 sm:mb-1 truncate uppercase tracking-wide">{item.kategori || 'General'}</div>
+                                        <div className="text-[10px] sm:text-xs font-medium text-indigo-600 mb-0.5 sm:mb-1 truncate uppercase tracking-wide">{item.kategori || 'Umum'}</div>
                                         <h3 className="text-xs sm:text-sm font-bold text-gray-900 line-clamp-2 leading-relaxed group-hover:text-indigo-600 transition-colors">{item.nama_produk}</h3>
                                     </div>
 
                                     {/* Stock Bar Visual */}
                                     <div className="mt-3 sm:mt-4">
                                         <div className="flex justify-between items-end mb-1">
-                                            <span className="text-[10px] text-gray-400">Stock Level</span>
+                                            <span className="text-[10px] text-gray-400">Level Stok</span>
                                             <span className={`text-[10px] font-semibold ${item.stok < 5 ? 'text-red-500' : 'text-gray-500'}`}>
-                                                {item.stok === 0 ? 'Out of Stock' : (item.stok < 5 ? 'Low Stock' : 'Good')}
+                                                {item.stok === 0 ? 'Habis' : (item.stok < 5 ? 'Menipis' : 'Aman')}
                                             </span>
                                         </div>
                                         <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -213,7 +211,7 @@ export default function ProdukIndex({ produk }) {
                                             <Link
                                                 href={route('produk.edit', item.id)}
                                                 className="group flex items-center px-4 py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors"
-                                                onClick={(e) => e.stopPropagation()} // Supaya tidak menembus ke card
+                                                onClick={(e) => e.stopPropagation()}
                                             >
                                                 <PencilSquareIcon className="mr-3 h-4 w-4 text-gray-400 group-hover:text-indigo-500" aria-hidden="true" />
                                                 Edit
@@ -223,7 +221,7 @@ export default function ProdukIndex({ produk }) {
                                                 className="group flex w-full items-center px-4 py-2.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
                                             >
                                                 <TrashIcon className="mr-3 h-4 w-4 text-red-400 group-hover:text-red-600" aria-hidden="true" />
-                                                Delete
+                                                Hapus
                                             </button>
                                         </div>
                                     </div>
@@ -239,8 +237,8 @@ export default function ProdukIndex({ produk }) {
                     <div className="p-4 bg-white rounded-full shadow-sm mb-4">
                         <MagnifyingGlassIcon className="w-8 h-8 text-gray-300" />
                     </div>
-                    <h3 className="text-gray-900 font-medium">No products found</h3>
-                    <p className="text-gray-500 text-sm mt-1">Try adjusting your search or add a new product.</p>
+                    <h3 className="text-gray-900 font-medium">Produk tidak ditemukan</h3>
+                    <p className="text-gray-500 text-sm mt-1">Coba sesuaikan pencarian Anda atau tambah produk baru.</p>
                 </div>
             )}
         </GeneralLayout>

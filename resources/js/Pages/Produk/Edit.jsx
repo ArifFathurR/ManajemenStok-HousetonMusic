@@ -129,16 +129,16 @@ export default function ProdukEdit({ produk }) {
                             <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
                         </Link>
                         <div>
-                            <h1 className="text-lg sm:text-xl font-bold text-gray-900">Edit Product</h1>
-                            <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Update inventory details.</p>
+                            <h1 className="text-lg sm:text-xl font-bold text-gray-900">Edit Produk</h1>
+                            <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Perbarui detail produk.</p>
                         </div>
                     </div>
 
                     {/* DESKTOP ACTION BUTTONS (Hidden di Mobile, Muncul di MD ke atas) */}
                     <div className="hidden md:flex gap-3">
-                         <Link href={route('produk.index')} className="px-6 py-2.5 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</Link>
+                         <Link href={route('produk.index')} className="px-6 py-2.5 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Batal</Link>
                         <button type="submit" disabled={processing} className="px-6 py-2.5 bg-gray-900 rounded-xl text-sm font-medium text-white hover:bg-gray-800 transition shadow-lg shadow-gray-200 disabled:opacity-70">
-                            {processing ? 'Updating...' : 'Update Product'}
+                            {processing ? 'Menyimpan...' : 'Simpan Perubahan'}
                         </button>
                     </div>
                 </div>
@@ -149,19 +149,19 @@ export default function ProdukEdit({ produk }) {
                     {/* LEFT: Image Upload */}
                     <div className="md:col-span-1">
                         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                            <h2 className="font-bold text-gray-900 mb-1">Thumbnail</h2>
+                            <h2 className="font-bold text-gray-900 mb-1">Foto Produk</h2>
                             <label className="relative group flex flex-col items-center justify-center w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-indigo-400 bg-gray-50 hover:bg-gray-100 transition-all cursor-pointer overflow-hidden mt-4">
                                 {imagePreview ? (
                                     <>
                                         <img src={imagePreview} className="w-full h-full object-contain p-4" />
                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="text-white text-xs font-medium flex items-center gap-2"><PhotoIcon className="w-4 h-4" /> Change</span>
+                                            <span className="text-white text-xs font-medium flex items-center gap-2"><PhotoIcon className="w-4 h-4" /> Ganti</span>
                                         </div>
                                     </>
                                 ) : (
                                     <div className="text-center px-4">
                                         <CloudArrowUpIcon className="w-8 h-8 text-gray-400 mb-2 mx-auto" />
-                                        <p className="text-xs text-indigo-600 font-semibold">Upload Image</p>
+                                        <p className="text-xs text-indigo-600 font-semibold">Unggah Foto</p>
                                     </div>
                                 )}
                                 <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
@@ -175,16 +175,16 @@ export default function ProdukEdit({ produk }) {
                             <div className="space-y-5">
                                 {/* Basic Info */}
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Product Name</label>
-                                    <input type="text" value={data.nama_produk} onChange={e => setData('nama_produk', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white transition-colors" placeholder="e.g. iPhone 15 Pro" />
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Nama Produk</label>
+                                    <input type="text" value={data.nama_produk} onChange={e => setData('nama_produk', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white transition-colors" placeholder="Contoh: iPhone 15 Pro" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Category</label>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Kategori</label>
                                         <input type="text" value={data.kategori} onChange={e => setData('kategori', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Unit</label>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Satuan</label>
                                         <select value={data.satuan} onChange={e => setData('satuan', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white">
                                             <option value="pcs">Pcs</option><option value="unit">Unit</option><option value="set">Set</option><option value="box">Box</option>
                                         </select>
@@ -200,8 +200,8 @@ export default function ProdukEdit({ produk }) {
                                             <AdjustmentsHorizontalIcon className="w-5 h-5" />
                                         </div>
                                         <div>
-                                            <h3 className="text-sm font-bold text-gray-900">Has Variants?</h3>
-                                            <p className="text-[10px] text-gray-500">Color, Size, etc.</p>
+                                            <h3 className="text-sm font-bold text-gray-900">Punya Varian?</h3>
+                                            <p className="text-[10px] text-gray-500">Warna, Ukuran, dll.</p>
                                         </div>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
@@ -215,12 +215,12 @@ export default function ProdukEdit({ produk }) {
                                     // --- MODE SINGLE PRODUCT ---
                                     <div className="space-y-4 animate-fade-in">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Stock Quantity</label>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Jumlah Stok</label>
                                             <input type="text" inputMode="numeric" value={formatInputPrice(data.stok)} onChange={(e) => handleSingleChange('stok', e)} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold" />
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Online Price</label>
+                                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Harga Online</label>
                                                 <div className="relative">
                                                     <span className="absolute left-3 top-2.5 text-gray-400 text-xs font-bold">Rp</span>
                                                     <input
@@ -232,7 +232,7 @@ export default function ProdukEdit({ produk }) {
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Offline Price</label>
+                                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Harga Offline</label>
                                                 <div className="relative">
                                                     <span className="absolute left-3 top-2.5 text-gray-400 text-xs font-bold">Rp</span>
                                                     <input
@@ -255,7 +255,7 @@ export default function ProdukEdit({ produk }) {
                                                     {/* Header: Badge & Trash */}
                                                     <div className="bg-gray-50/50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
                                                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                                            Variant #{index + 1}
+                                                            Varian #{index + 1}
                                                         </span>
                                                         {data.varians.length > 1 && (
                                                             <button type="button" onClick={() => removeVariantRow(index)} className="text-gray-400 hover:text-red-500 transition-colors">
@@ -280,10 +280,10 @@ export default function ProdukEdit({ produk }) {
                                                             </div>
                                                             {/* Name */}
                                                             <div className="flex-1">
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Variant Name</label>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nama Varian</label>
                                                                 <input
                                                                     type="text"
-                                                                    placeholder="e.g. Red, XL"
+                                                                    placeholder="Cth: Merah, XL"
                                                                     value={varian.nama_varian}
                                                                     onChange={(e) => handleVariantChange(e, index, 'nama_varian')}
                                                                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-indigo-500 focus:bg-white transition-colors"
@@ -293,7 +293,7 @@ export default function ProdukEdit({ produk }) {
 
                                                         {/* ROW 2: Stock (Full Width) */}
                                                         <div>
-                                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Current Stock</label>
+                                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Stok Saat Ini</label>
                                                             <input
                                                                 type="text" inputMode="numeric" placeholder="0"
                                                                 value={formatInputPrice(varian.stok)}
@@ -334,14 +334,14 @@ export default function ProdukEdit({ produk }) {
                                             ))}
                                         </div>
                                         <button type="button" onClick={addVariantRow} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 text-sm font-medium hover:border-indigo-500 hover:text-indigo-600 flex items-center justify-center gap-2 transition-all bg-white">
-                                            <PlusIcon className="w-5 h-5" /> Add Another Variant
+                                            <PlusIcon className="w-5 h-5" /> Tambah Varian Lain
                                         </button>
                                     </div>
                                 )}
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Description</label>
-                                    <textarea rows="3" value={data.deskripsi} onChange={e => setData('deskripsi', e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white transition-colors" placeholder="Product description..." ></textarea>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Deskripsi</label>
+                                    <textarea rows="3" value={data.deskripsi} onChange={e => setData('deskripsi', e.target.value)} className="w-full h-60 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white transition-colors" placeholder="Deskripsi produk..." ></textarea>
                                 </div>
                             </div>
                         </div>
@@ -355,14 +355,14 @@ export default function ProdukEdit({ produk }) {
                             href={route('produk.index')}
                             className="flex-1 inline-flex items-center justify-center px-4 py-3 border border-gray-200 bg-white rounded-xl text-sm font-bold text-gray-700 active:bg-gray-50"
                         >
-                            Cancel
+                            Batal
                         </Link>
                         <button
                             type="submit"
                             disabled={processing}
                             className="flex-1 inline-flex items-center justify-center px-4 py-3 bg-gray-900 rounded-xl text-sm font-bold text-white active:bg-gray-800 disabled:opacity-70 shadow-lg shadow-gray-200"
                         >
-                            {processing ? 'Saving...' : 'Save Changes'}
+                            {processing ? 'Menyimpan...' : 'Simpan Perubahan'}
                         </button>
                     </div>
                 </div>
