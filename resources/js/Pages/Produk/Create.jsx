@@ -259,7 +259,7 @@ export default function ProdukCreate() {
                                                         type="text" inputMode="numeric"
                                                         value={formatInputPrice(data.harga_offline)}
                                                         onChange={(e) => handleSingleChange('harga_offline', e)}
-                                                        className={`w-full pl-8 pr-3 py-2.5 bg-white border rounded-xl text-sm font-bold text-gray-600 focus:ring-indigo-500 ${errors.harga_offline ? 'border-red-500' : 'border-gray-200'}`}
+                                                        className={`w-full pl-8 pr-3 py-2.5 bg-white border rounded-xl text-sm font-bold text-gray-900 focus:ring-indigo-500 ${errors.harga_offline ? 'border-red-500' : 'border-gray-200'}`}
                                                         placeholder="0"
                                                     />
                                                 </div>
