@@ -1,15 +1,16 @@
 import GeneralLayout from '@/Layouts/GeneralLayout';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage, router } from '@inertiajs/react'; // Import router
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
-    PlusIcon, MagnifyingGlassIcon, PhotoIcon, ArrowsUpDownIcon
+    PlusIcon, MagnifyingGlassIcon, PhotoIcon, ArrowsUpDownIcon,
+    EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon // Import Icons baru
 } from '@heroicons/react/24/outline';
 
 export default function ProdukIndex({ produk }) {
     const { flash } = usePage().props;
 
-    // 1. Notifikasi Sukses dari Controller
+    // 1. Notifikasi Sukses
     useEffect(() => {
         if (flash?.success) {
             Swal.fire({
@@ -23,40 +24,76 @@ export default function ProdukIndex({ produk }) {
         }
     }, [flash]);
 
-    // 2. Logic Sorting & Search Client-Side Sederhana
+    // 2. Logic Sorting & Search
     const [localProduk, setLocalProduk] = useState(produk);
-    const [sortOrder, setSortOrder] = useState('asc'); // asc = stok sedikit, desc = stok banyak
+    const [sortOrder, setSortOrder] = useState('asc');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Update local state saat props berubah
+    // 3. State untuk Menu Titik Tiga (Dropdown)
+    const [openMenuId, setOpenMenuId] = useState(null);
+
+    // Menutup menu jika klik di luar area menu
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            // Jika yang diklik bukan bagian dari tombol menu, tutup semua menu
+            if (!event.target.closest('.product-menu-btn')) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
+
     useEffect(() => {
         setLocalProduk(produk);
     }, [produk]);
 
-    // Effect untuk Sorting & Filtering
     useEffect(() => {
         let filtered = [...produk];
-
-        // Filter Search
         if (searchQuery) {
             filtered = filtered.filter(item =>
                 item.nama_produk.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (item.kategori && item.kategori.toLowerCase().includes(searchQuery.toLowerCase()))
             );
         }
-
-        // Sorting based on Stock
         filtered.sort((a, b) => {
             return sortOrder === 'asc' ? a.stok - b.stok : b.stok - a.stok;
         });
-
         setLocalProduk(filtered);
     }, [sortOrder, searchQuery, produk]);
 
     const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
-    // Format Rupiah
-    const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(number);
+    // Function: Handle Toggle Menu
+    const toggleMenu = (e, id) => {
+        e.preventDefault(); // Mencegah Link card tereksekusi
+        e.stopPropagation(); // Mencegah event bubbling
+        setOpenMenuId(openMenuId === id ? null : id);
+    };
+
+    // Function: Handle Delete
+    const handleDelete = (e, id) => {
+        e.preventDefault();
+        setOpenMenuId(null); // Tutup menu
+
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "Data produk akan dihapus permanen!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#1f2937', // gray-900
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.delete(route('produk.destroy', id), {
+                    onSuccess: () => {
+                        // Alert sukses ditangani oleh useEffect flash di atas
+                    }
+                });
+            }
+        });
+    };
 
     return (
         <GeneralLayout>
@@ -104,62 +141,96 @@ export default function ProdukIndex({ produk }) {
             {localProduk.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-6">
                     {localProduk.map((item) => (
-                        <Link href={route('produk.show', item.id)} key={item.id} className="group bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full">
+                        <div key={item.id} className="relative group bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full">
 
-                            {/* IMAGE WRAPPER */}
-                            <div className="aspect-square bg-gray-50 relative overflow-hidden flex items-center justify-center">
-                                {item.gambar ? (
-                                    <img src={`/storage/${item.gambar}`} alt={item.nama_produk} className="w-full h-full object-contain p-2 sm:p-4 mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
-                                ) : (
-                                    <PhotoIcon className="h-10 w-10 sm:h-16 sm:w-16 text-gray-300" />
-                                )}
+                            {/* Link Pembungkus Utama - Kita jadikan div relative agar menu bisa di klik */}
+                            <Link href={route('produk.show', item.id)} className="flex flex-col h-full w-full">
 
-                                {/* === BADGE STOK & ALERT (UPDATED) === */}
-                                <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1">
-
-                                    {/* 1. Badge Utama (Total Stok) */}
-                                    <span className={`inline-flex items-center px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold border shadow-sm ${item.stok > 0 ? 'bg-white/90 backdrop-blur text-gray-700 border-gray-200' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${item.stok > 0 ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                        {item.stok > 0 ? `${item.stok} ${item.satuan || 'Pcs'}` : 'Habis'}
-                                    </span>
-
-                                    {/* 2. Alert "Varian Habis" (Muncul jika ada varian yg 0 tapi total stok > 0) */}
-                                    {item.ada_varian_habis && item.stok > 0 && (
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-orange-100 text-orange-700 border border-orange-200 shadow-sm animate-pulse">
-                                            ⚠️ Varian Habis
-                                        </span>
+                                {/* IMAGE WRAPPER */}
+                                <div className="aspect-square bg-gray-50 relative overflow-hidden flex items-center justify-center">
+                                    {item.gambar ? (
+                                        <img src={`/storage/${item.gambar}`} alt={item.nama_produk} className="w-full h-full object-contain p-2 sm:p-4 mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
+                                    ) : (
+                                        <PhotoIcon className="h-10 w-10 sm:h-16 sm:w-16 text-gray-300" />
                                     )}
-                                </div>
-                            </div>
 
-                            {/* PRODUCT INFO */}
-                            <div className="p-3 sm:p-4 flex flex-col flex-1 justify-between">
-                                <div>
-                                    <div className="text-[10px] sm:text-xs font-medium text-indigo-600 mb-0.5 sm:mb-1 truncate uppercase tracking-wide">{item.kategori || 'General'}</div>
-                                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 line-clamp-2 leading-relaxed group-hover:text-indigo-600 transition-colors">{item.nama_produk}</h3>
-                                </div>
-
-                                {/* Stock Bar Visual */}
-                                <div className="mt-3 sm:mt-4">
-                                    <div className="flex justify-between items-end mb-1">
-                                        <span className="text-[10px] text-gray-400">Stock Level</span>
-                                        <span className={`text-[10px] font-semibold ${item.stok < 5 ? 'text-red-500' : 'text-gray-500'}`}>
-                                            {item.stok === 0 ? 'Out of Stock' : (item.stok < 5 ? 'Low Stock' : 'Good')}
+                                    {/* === BADGE STOK (POJOK KANAN) === */}
+                                    <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1">
+                                        <span className={`inline-flex items-center px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold border shadow-sm ${item.stok > 0 ? 'bg-white/90 backdrop-blur text-gray-700 border-gray-200' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${item.stok > 0 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                            {item.stok > 0 ? `${item.stok} ${item.satuan || 'Pcs'}` : 'Habis'}
                                         </span>
-                                    </div>
-                                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                        <div
-                                            className={`h-1.5 rounded-full transition-all duration-500 ${
-                                                item.stok === 0 ? 'bg-gray-200' :
-                                                item.stok < 5 ? 'bg-red-500' :
-                                                item.stok < 15 ? 'bg-yellow-400' : 'bg-green-500'
-                                            }`}
-                                            style={{ width: `${Math.min(item.stok * 5, 100)}%` }}
-                                        ></div>
+                                        {item.ada_varian_habis && item.stok > 0 && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-orange-100 text-orange-700 border border-orange-200 shadow-sm animate-pulse">
+                                                ⚠️ Varian Habis
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
+
+                                {/* PRODUCT INFO */}
+                                <div className="p-3 sm:p-4 flex flex-col flex-1 justify-between">
+                                    <div>
+                                        <div className="text-[10px] sm:text-xs font-medium text-indigo-600 mb-0.5 sm:mb-1 truncate uppercase tracking-wide">{item.kategori || 'General'}</div>
+                                        <h3 className="text-xs sm:text-sm font-bold text-gray-900 line-clamp-2 leading-relaxed group-hover:text-indigo-600 transition-colors">{item.nama_produk}</h3>
+                                    </div>
+
+                                    {/* Stock Bar Visual */}
+                                    <div className="mt-3 sm:mt-4">
+                                        <div className="flex justify-between items-end mb-1">
+                                            <span className="text-[10px] text-gray-400">Stock Level</span>
+                                            <span className={`text-[10px] font-semibold ${item.stok < 5 ? 'text-red-500' : 'text-gray-500'}`}>
+                                                {item.stok === 0 ? 'Out of Stock' : (item.stok < 5 ? 'Low Stock' : 'Good')}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                            <div
+                                                className={`h-1.5 rounded-full transition-all duration-500 ${
+                                                    item.stok === 0 ? 'bg-gray-200' :
+                                                    item.stok < 5 ? 'bg-red-500' :
+                                                    item.stok < 15 ? 'bg-yellow-400' : 'bg-green-500'
+                                                }`}
+                                                style={{ width: `${Math.min(item.stok * 5, 100)}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Link>
+
+                            {/* === ACTION MENU (TITIK TIGA POJOK KIRI ATAS) === */}
+                            <div className="absolute top-2 left-2 z-10">
+                                <button
+                                    onClick={(e) => toggleMenu(e, item.id)}
+                                    className="product-menu-btn p-1.5 rounded-lg bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-white transition-all shadow-sm focus:outline-none"
+                                >
+                                    <EllipsisHorizontalIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                                </button>
+
+                                {/* Dropdown Menu */}
+                                {openMenuId === item.id && (
+                                    <div className="absolute left-0 mt-2 w-32 bg-white rounded-xl shadow-xl border border-gray-100 ring-1 ring-black ring-opacity-5 focus:outline-none overflow-hidden animate-fade-in origin-top-left z-50">
+                                        <div className="py-1">
+                                            <Link
+                                                href={route('produk.edit', item.id)}
+                                                className="group flex items-center px-4 py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors"
+                                                onClick={(e) => e.stopPropagation()} // Supaya tidak menembus ke card
+                                            >
+                                                <PencilSquareIcon className="mr-3 h-4 w-4 text-gray-400 group-hover:text-indigo-500" aria-hidden="true" />
+                                                Edit
+                                            </Link>
+                                            <button
+                                                onClick={(e) => handleDelete(e, item.id)}
+                                                className="group flex w-full items-center px-4 py-2.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                                            >
+                                                <TrashIcon className="mr-3 h-4 w-4 text-red-400 group-hover:text-red-600" aria-hidden="true" />
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </Link>
+
+                        </div>
                     ))}
                 </div>
             ) : (
