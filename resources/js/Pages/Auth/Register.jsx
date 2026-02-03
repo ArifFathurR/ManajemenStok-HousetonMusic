@@ -5,9 +5,10 @@ import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-export default function Register() {
+export default function Register({tokos }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
+        toko_id: '',
         email: '',
         password: '',
         password_confirmation: '',
@@ -41,6 +42,29 @@ export default function Register() {
                     />
 
                     <InputError message={errors.name} className="mt-2" />
+                </div>
+
+                <div className="mt-4">
+                    <InputLabel htmlFor="toko_id" value="Pilih Toko" />
+
+                    <select
+                        id="toko_id"
+                        name="toko_id"
+                        value={data.toko_id}
+                        onChange={(e) => setData('toko_id', e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        required
+                    >
+                        <option value="">-- Pilih Toko --</option>
+
+                        {tokos.map((toko) => (
+                            <option key={toko.id} value={toko.id}>
+                                {toko.nama_toko}
+                            </option>
+                        ))}
+                    </select>
+
+                    <InputError message={errors.toko_id} className="mt-2" />
                 </div>
 
                 <div className="mt-4">
