@@ -1,17 +1,21 @@
-import Dropdown from '@/Components/Dropdown';
-import { Link, usePage } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import Dropdown from "@/Components/Dropdown";
+import { Link, usePage } from "@inertiajs/react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-    HomeIcon, ShoppingBagIcon, CalculatorIcon,
-    BellIcon, Squares2X2Icon, ChartBarIcon,
-    DocumentChartBarIcon
-} from '@heroicons/react/24/outline';
+    HomeIcon,
+    ShoppingBagIcon,
+    CalculatorIcon,
+    BellIcon,
+    Squares2X2Icon,
+    ChartBarIcon,
+    DocumentChartBarIcon,
+} from "@heroicons/react/24/outline";
 import {
     HomeIcon as HomeIconSolid,
     ShoppingBagIcon as ShoppingBagIconSolid,
     CalculatorIcon as CalculatorIconSolid,
-    ChartBarIcon as ChartBarIconSolid
-} from '@heroicons/react/24/solid';
+    ChartBarIcon as ChartBarIconSolid,
+} from "@heroicons/react/24/solid";
 
 export default function GeneralLayout({ header, children }) {
     const { url } = usePage();
@@ -22,30 +26,71 @@ export default function GeneralLayout({ header, children }) {
     const containerClasses = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8";
 
     const mobileNavItems = [
-        { name: 'Beranda', href: route('dashboard'), icon: HomeIcon, iconSolid: HomeIconSolid, active: currentRoute === 'dashboard' },
-        { name: 'Produk', href: route('produk.index'), icon: ShoppingBagIcon, iconSolid: ShoppingBagIconSolid, active: currentRoute?.startsWith('produk') },
-        { name: 'Kasir', href: '#', icon: CalculatorIcon, iconSolid: CalculatorIconSolid, active: false },
-        { name: 'Laporan', href: '#', icon: ChartBarIcon, iconSolid: ChartBarIconSolid, active: false },
+        {
+            name: "Beranda",
+            href: route("dashboard"),
+            icon: HomeIcon,
+            iconSolid: HomeIconSolid,
+            active: currentRoute === "dashboard",
+        },
+        {
+            name: "Produk",
+            href: route("produk.index"),
+            icon: ShoppingBagIcon,
+            iconSolid: ShoppingBagIconSolid,
+            active: currentRoute?.startsWith("produk"),
+        },
+        {
+            name: "Kasir",
+            href: "#",
+            icon: CalculatorIcon,
+            iconSolid: CalculatorIconSolid,
+            active: false,
+        },
+        {
+            name: "Laporan",
+            href: "#",
+            icon: ChartBarIcon,
+            iconSolid: ChartBarIconSolid,
+            active: false,
+        },
     ];
 
     const navItems = [
-        { name: 'Beranda', href: route('dashboard'), icon: Squares2X2Icon, active: currentRoute === 'dashboard' },
-        { name: 'Produk', href: route('produk.index'), icon: ShoppingBagIcon, active: currentRoute?.startsWith('produk') },
-        { name: 'Kasir', href: '#', icon: CalculatorIcon, active: false },
-        { name: 'Laporan', href: '#', icon: DocumentChartBarIcon, active: false },
+        {
+            name: "Beranda",
+            href: route("dashboard"),
+            icon: Squares2X2Icon,
+            active: currentRoute === "dashboard",
+        },
+        {
+            name: "Produk",
+            href: route("produk.index"),
+            icon: ShoppingBagIcon,
+            active: currentRoute?.startsWith("produk"),
+        },
+        { name: "Kasir", href: "#", icon: CalculatorIcon, active: false },
+        {
+            name: "Laporan",
+            href: "#",
+            icon: DocumentChartBarIcon,
+            active: false,
+        },
     ];
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24 md:pb-0 font-sans">
-
             {/* === DESKTOP NAVBAR === */}
             <nav className="hidden md:block pt-6 pb-2 sticky top-0 z-40 bg-gray-50/95 backdrop-blur-sm transition-all">
                 <div className={containerClasses}>
                     <div className="flex items-center justify-between gap-4">
-
                         {/* 1. Logo Section */}
                         <div className="bg-white rounded-2xl px-5 py-2.5 shadow-sm border border-gray-100 flex items-center shrink-0 h-14">
-                            <img src="/images/logo-houston.png" alt="Houston Music" className="h-7 w-auto object-contain" />
+                            <img
+                                src="/images/logo-houston.png"
+                                alt="Houston Music"
+                                className="h-7 w-auto object-contain"
+                            />
                         </div>
 
                         {/* 2. Navigation Menu (Centered & Compact) */}
@@ -56,11 +101,15 @@ export default function GeneralLayout({ header, children }) {
                                     href={item.href}
                                     className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                                         item.active
-                                        ? 'bg-gray-900 text-white shadow-md'
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                            ? "bg-gray-900 text-white shadow-md"
+                                            : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
                                     }`}
                                 >
-                                    {item.icon && <item.icon className={`h-4 w-4 mr-2 ${item.active ? 'text-gray-300' : 'text-gray-400'}`} />}
+                                    {item.icon && (
+                                        <item.icon
+                                            className={`h-4 w-4 mr-2 ${item.active ? "text-gray-300" : "text-gray-400"}`}
+                                        />
+                                    )}
                                     {item.name}
                                 </Link>
                             ))}
@@ -68,11 +117,19 @@ export default function GeneralLayout({ header, children }) {
 
                         {/* 3. Right Actions (User & Alert) */}
                         <div className="bg-white rounded-2xl pl-5 pr-2 py-1.5 shadow-sm border border-gray-100 flex items-center gap-4 h-14">
-
                             {/* Welcome Text Desktop */}
                             <div className="hidden lg:flex items-center gap-2 text-sm text-gray-600">
-                                <span>Halo, <span className="font-bold text-gray-900">{user.name.split(' ')[0]}</span></span>
-                                <img src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif" alt="Wave" className="w-5 h-5" />
+                                <span>
+                                    Halo,{" "}
+                                    <span className="font-bold text-gray-900">
+                                        {user.name.split(" ")[0]}
+                                    </span>
+                                </span>
+                                <img
+                                    src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif"
+                                    alt="Wave"
+                                    className="w-5 h-5"
+                                />
                             </div>
 
                             <div className="h-5 w-px bg-gray-200 hidden lg:block"></div>
@@ -101,12 +158,23 @@ export default function GeneralLayout({ header, children }) {
                                 </Dropdown.Trigger>
                                 <Dropdown.Content align="right">
                                     <div className="px-4 py-3 border-b border-gray-100">
-                                        <div className="text-sm font-semibold text-gray-900 truncate">{user.name}</div>
-                                        <div className="text-xs text-gray-500 truncate">{user.email}</div>
+                                        <div className="text-sm font-semibold text-gray-900 truncate">
+                                            {user.name}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate">
+                                            {user.email}
+                                        </div>
                                     </div>
-                                    <Dropdown.Link href={route('profile.edit')}>Pengaturan Akun</Dropdown.Link>
+                                    <Dropdown.Link href={route("profile.edit")}>
+                                        Pengaturan Akun
+                                    </Dropdown.Link>
                                     <div className="border-t border-gray-100"></div>
-                                    <Dropdown.Link href={route('logout')} method="post" as="button" className="text-red-600 hover:bg-red-50 w-full text-left">
+                                    <Dropdown.Link
+                                        href={route("logout")}
+                                        method="post"
+                                        as="button"
+                                        className="text-red-600 hover:bg-red-50 w-full text-left"
+                                    >
                                         Keluar
                                     </Dropdown.Link>
                                 </Dropdown.Content>
@@ -118,17 +186,28 @@ export default function GeneralLayout({ header, children }) {
 
             {/* === MOBILE TOP BAR === */}
             <div className="md:hidden bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm sticky top-0 z-40 px-4 py-3 flex justify-between items-center">
-
                 {/* Logo Kiri */}
-                <img src="/images/logo-houston.png" alt="Houston Music" className="h-7 w-auto object-contain" />
+                <img
+                    src="/images/logo-houston.png"
+                    alt="Houston Music"
+                    className="h-7 w-auto object-contain"
+                />
 
                 {/* Group Kanan: Salam & Profile */}
                 <div className="flex items-center gap-3">
-
                     {/* Salam Mobile + GIF */}
                     <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                        <span>Halo, <span className="font-bold text-gray-900">{user.name.split(' ')[0]}</span></span>
-                        <img src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif" alt="Wave" className="w-4 h-4" />
+                        <span>
+                            Halo,{" "}
+                            <span className="font-bold text-gray-900">
+                                {user.name.split(" ")[0]}
+                            </span>
+                        </span>
+                        <img
+                            src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif"
+                            alt="Wave"
+                            className="w-4 h-4"
+                        />
                     </div>
 
                     {/* Mobile Profile Dropdown */}
@@ -145,13 +224,22 @@ export default function GeneralLayout({ header, children }) {
                         </Dropdown.Trigger>
                         <Dropdown.Content align="right" width="48">
                             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-                                <div className="text-sm font-bold text-gray-900">{user.name}</div>
-                                <div className="text-[10px] text-gray-500">{user.email}</div>
+                                <div className="text-sm font-bold text-gray-900">
+                                    {user.name}
+                                </div>
+                                <div className="text-[10px] text-gray-500">
+                                    {user.email}
+                                </div>
                             </div>
-                            <Dropdown.Link href={route('profile.edit')}>
+                            <Dropdown.Link href={route("profile.edit")}>
                                 Pengaturan
                             </Dropdown.Link>
-                            <Dropdown.Link href={route('logout')} method="post" as="button" className="text-red-600 font-medium">
+                            <Dropdown.Link
+                                href={route("logout")}
+                                method="post"
+                                as="button"
+                                className="text-red-600 font-medium"
+                            >
                                 Keluar
                             </Dropdown.Link>
                         </Dropdown.Content>
@@ -162,26 +250,26 @@ export default function GeneralLayout({ header, children }) {
             {/* Header Content (Judul Halaman) */}
             {header && (
                 <header className="py-6">
-                    <div className={containerClasses}>
-                        {header}
-                    </div>
+                    <div className={containerClasses}>{header}</div>
                 </header>
             )}
 
             {/* === MAIN CONTENT CONTAINER === */}
             <main>
-                <div className={containerClasses}>
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={url}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            transition={{ duration: 0.25, ease: "easeOut" }}
-                        >
-                            {children}
-                        </motion.div>
-                    </AnimatePresence>
+                <div className="mt-2">
+                    <div className={containerClasses}>
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={url}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.25, ease: "easeOut" }}
+                            >
+                                {children}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
                 </div>
             </main>
 
@@ -190,11 +278,23 @@ export default function GeneralLayout({ header, children }) {
                 {mobileNavItems.map((item) => {
                     const Icon = item.active ? item.iconSolid : item.icon;
                     return (
-                        <Link key={item.name} href={item.href} className={`flex flex-col items-center justify-center w-full h-full transition-all duration-200 group ${item.active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}>
-                            <div className={`p-1 rounded-xl transition-all ${item.active ? 'bg-gray-100' : 'group-active:scale-90'}`}>
-                                <Icon className={`h-6 w-6 ${item.active ? 'text-gray-900' : ''}`} />
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            className={`flex flex-col items-center justify-center w-full h-full transition-all duration-200 group ${item.active ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                        >
+                            <div
+                                className={`p-1 rounded-xl transition-all ${item.active ? "bg-gray-100" : "group-active:scale-90"}`}
+                            >
+                                <Icon
+                                    className={`h-6 w-6 ${item.active ? "text-gray-900" : ""}`}
+                                />
                             </div>
-                            <span className={`text-[10px] mt-0.5 font-medium ${item.active ? 'font-bold' : ''}`}>{item.name}</span>
+                            <span
+                                className={`text-[10px] mt-0.5 font-medium ${item.active ? "font-bold" : ""}`}
+                            >
+                                {item.name}
+                            </span>
                         </Link>
                     );
                 })}
