@@ -40,7 +40,6 @@ export default function GeneralLayout({ header, children }) {
 
             {/* === DESKTOP NAVBAR === */}
             <nav className="hidden md:block pt-6 pb-2 sticky top-0 z-40 bg-gray-50/95 backdrop-blur-sm transition-all">
-                {/* Gunakan containerClasses agar sejajar dengan konten bawah */}
                 <div className={containerClasses}>
                     <div className="flex items-center justify-between gap-4">
 
@@ -70,9 +69,10 @@ export default function GeneralLayout({ header, children }) {
                         {/* 3. Right Actions (User & Alert) */}
                         <div className="bg-white rounded-2xl pl-5 pr-2 py-1.5 shadow-sm border border-gray-100 flex items-center gap-4 h-14">
 
-                            {/* Welcome Text */}
-                            <div className="hidden lg:block text-sm text-gray-600">
-                                Halo, <span className="font-bold text-gray-900">{user.name.split(' ')[0]}</span> 👋
+                            {/* Welcome Text Desktop */}
+                            <div className="hidden lg:flex items-center gap-2 text-sm text-gray-600">
+                                <span>Halo, <span className="font-bold text-gray-900">{user.name.split(' ')[0]}</span></span>
+                                <img src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif" alt="Wave" className="w-5 h-5" />
                             </div>
 
                             <div className="h-5 w-px bg-gray-200 hidden lg:block"></div>
@@ -118,35 +118,45 @@ export default function GeneralLayout({ header, children }) {
 
             {/* === MOBILE TOP BAR === */}
             <div className="md:hidden bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm sticky top-0 z-40 px-4 py-3 flex justify-between items-center">
+
+                {/* Logo Kiri */}
                 <img src="/images/logo-houston.png" alt="Houston Music" className="h-7 w-auto object-contain" />
 
-                {/* Mobile Profile Dropdown */}
-                <Dropdown>
-                    <Dropdown.Trigger>
-                        <button className="focus:outline-none">
-                            <div className="relative">
+                {/* Group Kanan: Salam & Profile */}
+                <div className="flex items-center gap-3">
+
+                    {/* Salam Mobile + GIF */}
+                    <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <span>Halo, <span className="font-bold text-gray-900">{user.name.split(' ')[0]}</span></span>
+                        <img src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif" alt="Wave" className="w-4 h-4" />
+                    </div>
+
+                    {/* Mobile Profile Dropdown */}
+                    <Dropdown>
+                        <Dropdown.Trigger>
+                            <button className="focus:outline-none relative">
                                 <img
                                     src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random&color=fff`}
                                     alt={user.name}
-                                    className="h-8 w-8 rounded-full border border-gray-100"
+                                    className="h-8 w-8 rounded-full border border-gray-100 shadow-sm"
                                 />
                                 <span className="absolute bottom-0 right-0 h-2 w-2 bg-green-500 rounded-full border border-white"></span>
+                            </button>
+                        </Dropdown.Trigger>
+                        <Dropdown.Content align="right" width="48">
+                            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                                <div className="text-sm font-bold text-gray-900">{user.name}</div>
+                                <div className="text-[10px] text-gray-500">{user.email}</div>
                             </div>
-                        </button>
-                    </Dropdown.Trigger>
-                    <Dropdown.Content align="right" width="48">
-                        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-                            <div className="text-sm font-bold text-gray-900">{user.name}</div>
-                            <div className="text-[10px] text-gray-500">{user.email}</div>
-                        </div>
-                        <Dropdown.Link href={route('profile.edit')}>
-                            Pengaturan
-                        </Dropdown.Link>
-                        <Dropdown.Link href={route('logout')} method="post" as="button" className="text-red-600 font-medium">
-                            Keluar
-                        </Dropdown.Link>
-                    </Dropdown.Content>
-                </Dropdown>
+                            <Dropdown.Link href={route('profile.edit')}>
+                                Pengaturan
+                            </Dropdown.Link>
+                            <Dropdown.Link href={route('logout')} method="post" as="button" className="text-red-600 font-medium">
+                                Keluar
+                            </Dropdown.Link>
+                        </Dropdown.Content>
+                    </Dropdown>
+                </div>
             </div>
 
             {/* Header Content (Judul Halaman) */}
