@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\ProdukController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\TestController;
+use App\Http\Controllers\TransaksiController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -25,8 +25,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Produk Routes
     Route::resource('produk', ProdukController::class);
+    Route::get('/produk/{id}/edit', [ProdukController::class, 'edit'])->name('produk.edit');
+    Route::put('/produk/{id}', [ProdukController::class, 'update'])->name('produk.update');
+    
+    // Transaksi Routes
+    Route::resource('transaksi', TransaksiController::class);
+    Route::get('/transaksi/export', [TransaksiController::class, 'export'])->name('transaksi.export');
 });
 
-    Route::get('/test', [TestController::class, 'index'])->name('test.index');
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

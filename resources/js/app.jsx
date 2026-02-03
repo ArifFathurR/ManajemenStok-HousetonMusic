@@ -20,6 +20,7 @@ createInertiaApp({
         root.render(<App {...props} />);
     },
     progress: {
-        color: '#4B5563',
+        color: '#4B5563', // Warna loading bar (Gray-600)
+        showSpinner: true, // Tampilkan spinner di pojok kanan atas (opsional)
     },
 });

@@ -1,3 +1,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom warna NProgress Inertia */
+#nprogress .bar {
+  background: #4f46e5 !important; /* Warna Indigo-600 */
+  height: 3px !important;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px #4f46e5, 0 0 5px #4f46e5 !important;
+}
+
+#nprogress .spinner-icon {
+  border-top-color: #4f46e5 !important;
+  border-left-color: #4f46e5 !important;
+}

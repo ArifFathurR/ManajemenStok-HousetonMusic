@@ -114,6 +114,104 @@ class ProdukController extends Controller
         return redirect()->route('produk.index')->with('success', 'Produk berhasil ditambahkan!');
     }
 
+    public function edit($id)
+    {
+        $produk = Produk::with('varian')->where('toko_id', Auth::user()->toko_id)->findOrFail($id);
+
+        return Inertia::render('Produk/Edit', [
+            'produk' => $produk
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $produk = Produk::where('toko_id', Auth::user()->toko_id)->findOrFail($id);
+
+        // Validasi Sederhana (Bisa dipisah ke Request khusus)
+        $request->validate([
+            'nama_produk' => 'required|string|max:255',
+            'satuan' => 'required|string',
+            'is_variant' => 'required|boolean',
+            'gambar' => 'nullable', // Bisa string (url lama) atau file (upload baru)
+        ]);
+
+        DB::transaction(function () use ($request, $produk) {
+
+            // 1. UPDATE PARENT
+            $dataParent = [
+                'nama_produk' => $request->nama_produk,
+                'kategori' => $request->kategori,
+                'satuan' => $request->satuan,
+                'deskripsi' => $request->deskripsi,
+                'is_variant' => $request->is_variant,
+            ];
+
+            // Cek ganti gambar parent
+            if ($request->hasFile('gambar')) {
+                // Hapus lama jika ada
+                if ($produk->gambar_utama)
+                    Storage::disk('public')->delete($produk->gambar_utama);
+                $dataParent['gambar_utama'] = $request->file('gambar')->store('produk', 'public');
+            }
+
+            $produk->update($dataParent);
+
+            // 2. LOGIC VARIAN (SYNC)
+
+            // KASUS A: Pindah ke SINGLE PRODUK (Hapus semua varian, reset jadi Default)
+            if ($request->is_variant == false) {
+                // Hapus semua varian lama
+                $produk->varian()->delete();
+
+                // Buat 1 varian default baru
+                ProdukVarian::create([
+                    'produk_id' => $produk->id,
+                    'nama_varian' => 'Default',
+                    'stok' => $request->stok, // Dari input single
+                    'harga_online' => $request->harga_online,
+                    'harga_offline' => $request->harga_offline,
+                ]);
+            }
+            // KASUS B: Mode VARIAN
+            else {
+                // 1. Ambil semua ID varian yang dikirim dari form
+                // (Filter yang punya ID saja, varian baru ID-nya null/undefined)
+                $sentIds = collect($request->varians)->pluck('id')->filter()->toArray();
+
+                // 2. Hapus varian di Database yang TIDAK ADA di form (User menghapus baris)
+                ProdukVarian::where('produk_id', $produk->id)
+                    ->whereNotIn('id', $sentIds)
+                    ->delete();
+
+                // 3. Loop update/create
+                foreach ($request->varians as $v) {
+                    $varianData = [
+                        'produk_id' => $produk->id,
+                        'nama_varian' => $v['nama_varian'],
+                        'stok' => $v['stok'],
+                        'harga_online' => $v['harga_online'],
+                        'harga_offline' => $v['harga_offline'],
+                    ];
+
+                    // Handle Gambar Varian
+                    if (isset($v['gambar']) && $v['gambar'] instanceof \Illuminate\Http\UploadedFile) {
+                        $varianData['gambar'] = $v['gambar']->store('varian', 'public');
+                    }
+
+                    if (isset($v['id'])) {
+                        // UPDATE Existing
+                        ProdukVarian::where('id', $v['id'])->update($varianData);
+                    } else {
+                        // CREATE New (Baris baru ditambahkan user)
+                        ProdukVarian::create($varianData);
+                    }
+                }
+            }
+        });
+
+        return redirect()->route('produk.index')->with('success', 'Produk berhasil diperbarui!');
+    }
+
     public function show($id)
     {
         // Ambil produk beserta variannya
