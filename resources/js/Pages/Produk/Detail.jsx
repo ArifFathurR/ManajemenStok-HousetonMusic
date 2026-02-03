@@ -1,4 +1,4 @@
-import TestLayout from '@/Layouts/TestLayout';
+import GeneralLayout from '@/Layouts/GeneralLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import {
@@ -8,27 +8,15 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function ProductDetail({ produk }) {
-    const [selectedImage, setSelectedImage] = useState(0);
+    // 1. State Varian (Untuk Data Harga/Stok) - Default Index 0
+    const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
-    const productData = produk || {
-        id: 1,
-        nama_produk: 'Apple AirPods Max (USB-C)',
-        kategori: 'Accessories',
-        stok: 25,
-        satuan: 'Unit',
-        harga_online: 8500000,
-        harga_offline: 8250000,
-        deskripsi: 'AirPods Max, the ultimate listening experience. Now available in five new colors. Apple-designed drivers deliver high-fidelity audio. Every detail, from the canopy to the cushions, has been conceived with incredible precision in mind.',
-        status: 'Published',
-        image_url: 'https://images.unsplash.com/photo-1625298378605-0ff5a3d13f0d?w=500',
-    };
+    // 2. State Gambar Preview (Untuk Visual)
+    // FIX: Default langsung ke Gambar Utama Produk, bukan gambar varian
+    const [previewImage, setPreviewImage] = useState(produk.image_url);
 
-    const productImages = [
-        'https://images.unsplash.com/photo-1625298378605-0ff5a3d13f0d?w=500',
-        'https://images.unsplash.com/photo-1625298378695-9c67b3c22c15?w=500',
-        'https://images.unsplash.com/photo-1625298378692-3946e6f75f0b?w=500',
-        'https://images.unsplash.com/photo-1625298378683-e5e5e5a3e5b5?w=500',
-    ];
+    const variants = produk.varians || [];
+    const activeVariant = variants[selectedVariantIndex] || {};
 
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', {
@@ -36,16 +24,31 @@ export default function ProductDetail({ produk }) {
             currency: 'IDR',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-        }).format(number);
+        }).format(number || 0);
+    };
+
+    // Handler: Klik Thumbnail UTAMA
+    const handleMainImageClick = () => {
+        setPreviewImage(produk.image_url);
+    };
+
+    // Handler: Klik Thumbnail VARIAN
+    const handleVariantClick = (index) => {
+        // 1. Update Data (Harga/Stok)
+        setSelectedVariantIndex(index);
+
+        // 2. Update Gambar
+        // Jika varian punya gambar, tampilkan. Jika tidak, tetap pakai gambar utama.
+        const variantImg = variants[index].gambar_url || produk.image_url;
+        setPreviewImage(variantImg);
     };
 
     return (
-        <TestLayout>
-            <Head title={`Detail - ${productData.nama_produk}`} />
+        <GeneralLayout>
+            <Head title={`Detail - ${produk.nama_produk}`} />
 
             {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
-                {/* Title Section */}
                 <div className="flex items-center gap-3 sm:gap-4">
                     <Link
                         href={route('produk.index')}
@@ -61,14 +64,13 @@ export default function ProductDetail({ produk }) {
                     </div>
                 </div>
 
-                {/* Buttons Section */}
                 <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:gap-3">
                      <button className="inline-flex items-center justify-center py-2.5 px-3 sm:px-4 border border-gray-200 bg-white rounded-xl text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition shadow-sm">
                         <PencilSquareIcon className="w-4 h-4 mr-1.5 sm:mr-2" />
                         <span>Edit</span>
                     </button>
                     <button className="inline-flex items-center justify-center py-2.5 px-3 sm:px-6 bg-gray-900 rounded-xl text-xs sm:text-sm font-medium text-white hover:bg-gray-800 transition shadow-lg shadow-gray-200">
-                        Add to Product
+                        Add Stock
                     </button>
                 </div>
             </div>
@@ -78,50 +80,102 @@ export default function ProductDetail({ produk }) {
                 <div className="lg:col-span-1">
                     <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-gray-100 h-full">
                         <h2 className="font-bold text-gray-900 mb-1">Product Image</h2>
-                        <p className="text-xs sm:text-sm text-gray-500 mb-5 sm:mb-6">Set your thumbnail product.</p>
+                        <p className="text-xs sm:text-sm text-gray-500 mb-5 sm:mb-6">
+                            {/* Logic Label: Cek apakah gambar yang tampil == Gambar Utama */}
+                            {previewImage === produk.image_url
+                                ? 'Main product image.'
+                                : `Variant: ${activeVariant.nama_varian}`}
+                        </p>
 
-                        {/* Main Image */}
+                        {/* PREVIEW GAMBAR BESAR */}
                         <div className="bg-gray-50 rounded-xl aspect-square flex items-center justify-center mb-4 sm:mb-6 overflow-hidden border border-gray-100 relative group">
-                            {productImages[selectedImage] ? (
+                            {previewImage ? (
                                 <img
-                                    src={productImages[selectedImage]}
+                                    src={previewImage}
                                     alt="Product Preview"
                                     className="w-full h-full object-contain p-4 mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
                                 />
                             ) : (
                                 <PhotoIcon className="h-20 w-20 text-gray-300" />
                             )}
+
+                            {/* Label Varian (Hanya muncul jika yang tampil gambar varian) */}
+                            {variants.length > 0 && previewImage !== produk.image_url && (
+                                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-1 rounded-md">
+                                    {activeVariant.nama_varian}
+                                </div>
+                            )}
                         </div>
 
-                        {/* Thumbnails */}
-                        <div className="grid grid-cols-4 gap-2 sm:gap-3">
-                            {productImages.map((img, index) => (
+                        {/* THUMBNAILS GALLERY */}
+                        {variants.length > 0 && (
+                            <div className="grid grid-cols-4 gap-2 sm:gap-3 animate-fade-in">
+
+                                {/* 1. THUMBNAIL UTAMA */}
                                 <button
-                                    key={index}
-                                    onClick={() => setSelectedImage(index)}
+                                    onClick={handleMainImageClick}
                                     className={`aspect-square rounded-xl overflow-hidden border transition-all p-1 bg-gray-50 ${
-                                        selectedImage === index
+                                        previewImage === produk.image_url
                                             ? 'border-indigo-600 ring-1 ring-indigo-600 bg-white'
                                             : 'border-transparent hover:border-gray-300'
                                     }`}
+                                    title="Main Image"
                                 >
-                                    <img
-                                        src={img}
-                                        alt={`Thumb ${index}`}
-                                        className="w-full h-full object-contain mix-blend-multiply"
-                                    />
+                                    {produk.image_url ? (
+                                        <img
+                                            src={produk.image_url}
+                                            alt="Main"
+                                            className="w-full h-full object-contain mix-blend-multiply"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                            <PhotoIcon className="w-5 h-5" />
+                                        </div>
+                                    )}
                                 </button>
-                            ))}
-                            <button className="aspect-square rounded-xl border-2 border-dashed border-indigo-200 flex items-center justify-center hover:bg-indigo-50 transition text-indigo-500">
-                                <span className="text-xl sm:text-2xl font-light">+</span>
-                            </button>
-                        </div>
+
+                                {/* 2. THUMBNAIL VARIAN */}
+                                {variants.map((variant, index) => {
+                                    const thumbImage = variant.gambar_url;
+
+                                    // Highlight aktif jika: gambar yang tampil SAMA DENGAN gambar varian ini
+                                    // DAN gambar yang tampil BUKAN gambar utama (untuk handle varian yg ga punya gambar)
+                                    const isSelected =
+                                        (selectedVariantIndex === index && previewImage !== produk.image_url);
+
+                                    return (
+                                        <button
+                                            key={variant.id}
+                                            onClick={() => handleVariantClick(index)}
+                                            className={`aspect-square rounded-xl overflow-hidden border transition-all p-1 bg-gray-50 ${
+                                                isSelected
+                                                    ? 'border-indigo-600 ring-1 ring-indigo-600 bg-white'
+                                                    : 'border-transparent hover:border-gray-300'
+                                            }`}
+                                            title={variant.nama_varian}
+                                        >
+                                            {thumbImage ? (
+                                                <img
+                                                    src={thumbImage}
+                                                    alt={variant.nama_varian}
+                                                    className="w-full h-full object-contain mix-blend-multiply"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100">
+                                                    <span className="text-[10px] font-bold">{variant.nama_varian.substring(0,2).toUpperCase()}</span>
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Right Column - Product Detail */}
                 <div className="lg:col-span-2">
-                    <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-gray-100">
+                    <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-gray-100 h-full">
                         <h2 className="font-bold text-gray-900 mb-1">Product Detail</h2>
                         <p className="text-xs sm:text-sm text-gray-500 mb-6 sm:mb-8">Set your product information.</p>
 
@@ -130,7 +184,7 @@ export default function ProductDetail({ produk }) {
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Product Name</label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-sm">
-                                    {productData.nama_produk}
+                                    {produk.nama_produk}
                                 </div>
                             </div>
 
@@ -138,7 +192,7 @@ export default function ProductDetail({ produk }) {
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Description</label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-600 text-sm leading-relaxed min-h-[100px] sm:min-h-[120px] shadow-sm">
-                                    {productData.deskripsi}
+                                    {produk.deskripsi || 'No description.'}
                                 </div>
                             </div>
 
@@ -147,7 +201,7 @@ export default function ProductDetail({ produk }) {
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Categories</label>
                                 <div className="relative">
                                     <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm flex items-center justify-between shadow-sm">
-                                        <span>{productData.kategori}</span>
+                                        <span>{produk.kategori || '-'}</span>
                                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                                         </svg>
@@ -157,18 +211,20 @@ export default function ProductDetail({ produk }) {
 
                             {/* Pricing Section */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Pricing</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
+                                    Pricing {variants.length > 1 && <span className="text-indigo-600 text-xs font-normal ml-1">({activeVariant.nama_varian})</span>}
+                                </label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <div className="space-y-1">
                                         <span className="text-xs text-gray-500 font-medium ml-1">Harga Online</span>
                                         <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm font-medium shadow-sm">
-                                            {formatRupiah(productData.harga_online)}
+                                            {formatRupiah(activeVariant.harga_online)}
                                         </div>
                                     </div>
                                     <div className="space-y-1">
                                          <span className="text-xs text-gray-500 font-medium ml-1">Harga Offline</span>
                                          <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm font-medium shadow-sm">
-                                            {formatRupiah(productData.harga_offline)}
+                                            {formatRupiah(activeVariant.harga_offline)}
                                         </div>
                                     </div>
                                 </div>
@@ -179,12 +235,12 @@ export default function ProductDetail({ produk }) {
                                 <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Stock Availability</label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm flex items-center justify-between shadow-sm">
                                     <span className="flex items-center gap-2.5">
-                                        <span className={`w-2.5 h-2.5 rounded-full ${productData.stok > 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500'}`}></span>
+                                        <span className={`w-2.5 h-2.5 rounded-full ${activeVariant.stok > 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500'}`}></span>
                                         <span className="font-medium">
-                                            {productData.stok} {productData.satuan}
+                                            {activeVariant.stok} {produk.satuan}
                                         </span>
-                                        <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md ${productData.stok > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                                            {productData.stok > 0 ? 'Available' : 'Out of Stock'}
+                                        <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md ${activeVariant.stok > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                            {activeVariant.stok > 0 ? 'Available' : 'Out of Stock'}
                                         </span>
                                     </span>
 
@@ -198,6 +254,6 @@ export default function ProductDetail({ produk }) {
                     </div>
                 </div>
             </div>
-        </TestLayout>
+        </GeneralLayout>
     );
 }

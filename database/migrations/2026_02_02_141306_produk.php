@@ -12,14 +12,11 @@ return new class extends Migration {
             $table->foreignId('toko_id')
                   ->constrained('toko')
                   ->cascadeOnDelete();
-
             $table->string('nama_produk');
-            $table->string('kategori')->nullable(); // input manual
-            $table->integer('stok')->default(0);
-            $table->string('satuan')->nullable();
-            $table->decimal('harga_online', 12, 2);
-            $table->decimal('harga_offline', 12, 2);
+            $table->string('kategori')->nullable();
             $table->text('deskripsi')->nullable();
+            $table->string('gambar_utama')->nullable();
+            $table->boolean('is_variant')->default(false);
             $table->timestamps();
         });
     }

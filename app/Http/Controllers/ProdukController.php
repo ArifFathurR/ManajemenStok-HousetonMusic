@@ -2,134 +2,152 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Models\Produk;
+use App\Models\ProdukVarian;
+use App\Http\Requests\StoreProdukRequest;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use Illuminate\Http\Request;
 
 class ProdukController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        // Dummy data untuk list produk
-        $produk = [
-            [
-                'id' => 1,
-                'nama_produk' => 'Apple AirPods Max (USB-C)',
-                'kategori' => 'Accessories',
-                'stok' => 25,
-                'satuan' => 'pcs',
-                'harga_online' => 8594000,
-                'harga_offline' => 8500000,
-            ],
-            [
-                'id' => 2,
-                'nama_produk' => 'iPhone 15 Pro Max',
-                'kategori' => 'Electronics',
-                'stok' => 15,
-                'satuan' => 'pcs',
-                'harga_online' => 22999000,
-                'harga_offline' => 22500000,
-            ],
-            [
-                'id' => 3,
-                'nama_produk' => 'MacBook Pro M3',
-                'kategori' => 'Electronics',
-                'stok' => 8,
-                'satuan' => 'pcs',
-                'harga_online' => 35999000,
-                'harga_offline' => 35500000,
-            ],
-        ];
+        $userTokoId = Auth::user()->toko_id;
+
+        $produkRaw = Produk::with('varian')
+            ->where('toko_id', $userTokoId)
+            ->latest()
+            ->get();
+
+        $produk = $produkRaw->map(function ($item) {
+            $varianUtama = $item->varian->first();
+
+            $totalStok = $item->varian->sum('stok');
+
+            $adaVarianHabis = $item->is_variant && $item->varian->contains('stok', 0);
+
+            return [
+                'id' => $item->id,
+                'nama_produk' => $item->nama_produk,
+                'kategori' => $item->kategori,
+                'satuan' => $item->satuan ?? 'Pcs',
+                'gambar' => $item->gambar_utama,
+
+                'stok' => $totalStok,
+                'ada_varian_habis' => $adaVarianHabis,
+
+                'harga_online' => $varianUtama ? $varianUtama->harga_online : 0,
+                'harga_offline' => $varianUtama ? $varianUtama->harga_offline : 0,
+            ];
+        });
 
         return Inertia::render('Produk/Index', [
             'produk' => $produk
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         return Inertia::render('Produk/Create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function store(StoreProdukRequest $request)
     {
-        // Untuk sementara hanya redirect dengan message
-        return redirect()->route('produk.index')
-            ->with('success', 'Produk berhasil ditambahkan (dummy).');
+        DB::transaction(function () use ($request) {
+
+            // 1. Upload Gambar Utama (Parent)
+            $pathGambarUtama = null;
+            if ($request->hasFile('gambar')) {
+                $pathGambarUtama = $request->file('gambar')->store('produk', 'public');
+            }
+
+            // 2. Simpan Parent
+            $produk = Produk::create([
+                'toko_id' => Auth::user()->toko_id,
+                'nama_produk' => $request->nama_produk,
+                'kategori' => $request->kategori,
+                'satuan' => $request->satuan,
+                'deskripsi' => $request->deskripsi,
+                'gambar_utama' => $pathGambarUtama,
+                'is_variant' => $request->is_variant,
+            ]);
+
+            // 3. Simpan Varian
+            if ($request->is_variant) {
+                // Loop varian
+                foreach ($request->varians as $index => $v) {
+
+                    // Logic Simpan Gambar Varian
+                    // Kita akses file menggunakan index array request
+                    $pathGambarVarian = null;
+                    if ($request->hasFile("varians.$index.gambar")) {
+                        $pathGambarVarian = $request->file("varians.$index.gambar")->store('varian', 'public');
+                    }
+
+                    ProdukVarian::create([
+                        'produk_id' => $produk->id,
+                        'nama_varian' => $v['nama_varian'],
+                        'stok' => $v['stok'],
+                        'harga_online' => $v['harga_online'],
+                        'harga_offline' => $v['harga_offline'],
+                        'sku' => null,
+                        'gambar' => $pathGambarVarian, // Simpan Path
+                    ]);
+                }
+            } else {
+                // Produk Tunggal
+                ProdukVarian::create([
+                    'produk_id' => $produk->id,
+                    'nama_varian' => 'Default',
+                    'stok' => $request->stok,
+                    'harga_online' => $request->harga_online,
+                    'harga_offline' => $request->harga_offline,
+                    'sku' => null,
+                    'gambar' => null, // Pakai gambar parent biasanya
+                ]);
+            }
+        });
+
+        return redirect()->route('produk.index')->with('success', 'Produk berhasil ditambahkan!');
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show($id)
     {
-        // Dummy data produk detail
-        $produk = [
-            'id' => $id,
-            'nama_produk' => 'Apple AirPods Max (USB-C)',
-            'kategori' => 'Accessories',
-            'stok' => 25,
-            'satuan' => 'pcs',
-            'harga_online' => 8594000,
-            'harga_offline' => 8500000,
-            'deskripsi' => 'AirPods Max, the ultimate listening experience. Now available in five new colors. Apple-designed drivers deliver high-fidelity audio. Every detail, from the canopy to the cushions, has been conceived with incredible precision in mind, blowing precision headsets. Pre-level Active Noise Cancellation 1 blocks out outside noise, while Transparency mode lets you converse with your surroundings. Lightweight. USB-C connector for audio connections charging. AirPods Max come in five fresh colors: Midnight, Starlight, Blue, Purple, and Orange.',
-            'image_url' => 'https://images.unsplash.com/photo-1625298378605-0ff5a3d13f0d?w=500',
-            'created_at' => '2024-01-15',
-            'updated_at' => '2024-02-03',
+        // Ambil produk beserta variannya
+        $item = Produk::with('varian')
+            ->where('toko_id', Auth::user()->toko_id)
+            ->findOrFail($id);
+
+        // Siapkan data untuk Frontend
+        $produkData = [
+            'id' => $item->id,
+            'nama_produk' => $item->nama_produk,
+            'kategori' => $item->kategori,
+            'satuan' => $item->satuan,
+            'deskripsi' => $item->deskripsi,
+            // Gambar Utama Parent
+            'image_url' => $item->gambar_utama ? "/storage/{$item->gambar_utama}" : null,
+
+            // LIST SEMUA VARIAN (Penting buat Switcher di Frontend)
+            'varians' => $item->varian->map(function ($v) {
+                return [
+                    'id' => $v->id,
+                    'nama_varian' => $v->nama_varian,
+                    'stok' => $v->stok,
+                    'harga_online' => $v->harga_online,
+                    'harga_offline' => $v->harga_offline,
+                    'sku' => $v->sku,
+                    // Gambar Varian (jika ada), kalau null pakai default parent nanti di frontend
+                    'gambar_url' => $v->gambar ? "/storage/{$v->gambar}" : null,
+                ];
+            }),
         ];
 
         return Inertia::render('Produk/Detail', [
-            'produk' => $produk
+            'produk' => $produkData
         ]);
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit($id)
-    {
-        // Dummy data untuk edit
-        $produk = [
-            'id' => $id,
-            'nama_produk' => 'Apple AirPods Max (USB-C)',
-            'kategori' => 'Accessories',
-            'stok' => 25,
-            'satuan' => 'pcs',
-            'harga_online' => 8594000,
-            'harga_offline' => 8500000,
-            'deskripsi' => 'AirPods Max, the ultimate listening experience.',
-        ];
-
-        return Inertia::render('Produk/Edit', [
-            'produk' => $produk
-        ]);
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, $id)
-    {
-        // Untuk sementara hanya redirect dengan message
-        return redirect()->route('produk.show', $id)
-            ->with('success', 'Produk berhasil diperbarui (dummy).');
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy($id)
-    {
-        // Untuk sementara hanya redirect dengan message
-        return redirect()->route('produk.index')
-            ->with('success', 'Produk berhasil dihapus (dummy).');
     }
 }
