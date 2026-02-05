@@ -11,10 +11,11 @@ import {
     ChevronDownIcon,
     CalendarIcon,
     BuildingStorefrontIcon,
-    GlobeAsiaAustraliaIcon
+    GlobeAsiaAustraliaIcon,
+    DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 
-// Helper Format Rupiah & Tanggal
+// Helper Format Rupiah
 const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -24,6 +25,7 @@ const formatRupiah = (number) => {
     }).format(number);
 };
 
+// Helper Format Tanggal
 const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
         day: 'numeric', month: 'short', year: 'numeric',
@@ -71,6 +73,19 @@ export default function Index({ transaksi, stats, filters }) {
     const resetFilter = () => {
         setFilterValues({ channel: 'all', payment_method: 'all', start_date: '', end_date: '' });
         router.get(route('transaksi.index'), {}, { preserveState: true });
+    };
+
+    const handleExport = () => {
+        // Build query params manual agar bisa buka tab baru/download langsung
+        const params = new URLSearchParams({
+            start_date: filterValues.start_date,
+            end_date: filterValues.end_date,
+            // Opsional: kirim filter lain jika controller mendukung filter saat export
+            channel: filterValues.channel,
+            payment_method: filterValues.payment_method
+        }).toString();
+
+        window.location.href = route('transaksi.export') + '?' + params;
     };
 
     return (
@@ -124,7 +139,7 @@ export default function Index({ transaksi, stats, filters }) {
                 </div>
             </div>
 
-            {/* 2. FILTER SECTION (Collapsible di Mobile) */}
+            {/* --- 2. FILTER SECTION (Collapsible) --- */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 md:mb-6 overflow-hidden">
                 <div 
                     className="p-4 flex justify-between items-center cursor-pointer md:cursor-default hover:bg-gray-50 transition-colors"
@@ -176,9 +191,9 @@ export default function Index({ transaksi, stats, filters }) {
                             </select>
                         </div>
 
-                        {/* Date Range */}
+                        {/* Date Range & Actions */}
                         <div className="col-span-1 md:col-span-2 space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal</label>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal & Aksi</label>
                             <div className="flex gap-2 items-center">
                                 <div className="relative flex-1">
                                     <input 
@@ -197,6 +212,8 @@ export default function Index({ transaksi, stats, filters }) {
                                         className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50"
                                     />
                                 </div>
+                                
+                                {/* Tombol Reset */}
                                 <button 
                                     onClick={resetFilter}
                                     className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200"
@@ -204,13 +221,23 @@ export default function Index({ transaksi, stats, filters }) {
                                 >
                                     <ArrowPathIcon className="w-5 h-5" />
                                 </button>
+
+                                {/* Tombol Export Excel */}
+                                <button 
+                                    onClick={handleExport}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+                                    title="Export Excel"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5" />
+                                    <span className="hidden md:inline">Export</span>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* 3. LIST TRANSAKSI */}
+            {/* --- 3. LIST TRANSAKSI --- */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
                 {transaksi.data.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-400 p-6 text-center">

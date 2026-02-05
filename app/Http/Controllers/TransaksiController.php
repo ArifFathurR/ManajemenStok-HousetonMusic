@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Exports\LaporanKeuanganExport;
+use Maatwebsite\Excel\Facades\Excel;
 use App\Models\Transaksi;
 use App\Models\TransaksiDetail;
 use App\Models\Produk;
@@ -66,6 +67,16 @@ class TransaksiController extends Controller
             // Tambahkan payment_method ke props filters
             'filters' => $request->only(['channel', 'start_date', 'end_date', 'payment_method'])
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $startDate = $request->start_date;
+        $endDate = $request->end_date;
+
+        $fileName = 'Laporan_Keuangan_' . ($startDate ?? 'Semua') . '_sd_' . ($endDate ?? 'Semua') . '.xlsx';
+
+        return Excel::download(new LaporanKeuanganExport($startDate, $endDate), $fileName);
     }
 
     /**
