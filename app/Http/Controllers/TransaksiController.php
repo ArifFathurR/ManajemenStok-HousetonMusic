@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Exports\LaporanKeuanganExport;
+use Maatwebsite\Excel\Facades\Excel;
 use App\Models\Transaksi;
 use App\Models\TransaksiDetail;
 use App\Models\Produk;
@@ -25,19 +26,27 @@ class TransaksiController extends Controller
             ->where('toko_id', $tokoId)
             ->orderBy('created_at', 'desc');
 
+        // 1. Filter Channel
         if ($request->filled('channel') && $request->channel != 'all') {
             $query->where('channel', $request->channel);
         }
 
+        // 2. Filter Metode Pembayaran
+        if ($request->filled('payment_method') && $request->payment_method != 'all') {
+            $query->where('metode_pembayaran', $request->payment_method);
+        }
+
+        // 3. Filter Tanggal Mulai
         if ($request->filled('start_date')) {
             $query->whereDate('tanggal', '>=', $request->start_date);
         }
 
+        // 4. Filter Tanggal Akhir
         if ($request->filled('end_date')) {
             $query->whereDate('tanggal', '<=', $request->end_date);
         }
 
-        // Search by kode_transaksi
+        // 5. Search by kode_transaksi
         if ($request->filled('search')) {
             $query->where('kode_transaksi', 'like', '%' . $request->search . '%');
         }
@@ -54,11 +63,24 @@ class TransaksiController extends Controller
         return Inertia::render('Transaksi/Index', [
             'transaksi' => $transaksi,
             'stats' => $stats,
-            'toko' => $toko, // <--- Kirim ke frontend
-            'filters' => $request->only(['channel', 'start_date', 'end_date', 'search'])
+            'toko' => $toko,
+            'filters' => $request->only(['channel', 'start_date', 'end_date', 'search', 'payment_method'])
         ]);
     }
 
+    public function export(Request $request)
+    {
+        $startDate = $request->start_date;
+        $endDate = $request->end_date;
+
+        $fileName = 'Laporan_Keuangan_' . ($startDate ?? 'Semua') . '_sd_' . ($endDate ?? 'Semua') . '.xlsx';
+
+        return Excel::download(new LaporanKeuanganExport($startDate, $endDate), $fileName);
+    }
+
+    /**
+     * Show the form for creating a new resource (POS Interface).
+     */
     public function create()
     {
         $user = Auth::user();
@@ -174,7 +196,7 @@ class TransaksiController extends Controller
             $transaksi = Transaksi::create([
                 'toko_id' => $tokoId,
                 'user_id' => $userId,
-                'kode_transaksi' => $kodeUnik, // <--- DISIMPAN KE DB
+                'kode_transaksi' => $kodeUnik, 
                 'channel' => $request->channel,
                 'metode_pembayaran' => $request->paymentMethod,
                 'total' => $total,

@@ -1,0 +1,218 @@
+<?php
+
+namespace App\Exports;
+
+use App\Models\Transaksi;
+use App\Models\Produk;
+use App\Models\Kategori; // <--- Import Model Kategori
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
+use Illuminate\Support\Facades\Auth;
+
+class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles, ShouldAutoSize, WithEvents
+{
+    protected $startDate;
+    protected $endDate;
+    protected $tokoId;
+    protected $categories;
+
+    public function __construct($startDate, $endDate)
+    {
+        $this->startDate = $startDate ? Carbon::parse($startDate) : Carbon::now()->startOfMonth();
+        $this->endDate = $endDate ? Carbon::parse($endDate) : Carbon::now()->endOfMonth();
+        $this->tokoId = Auth::user()->toko_id;
+
+        // --- UBAH DI SINI ---
+        // Ambil Objek Kategori dari Tabel Kategori, bukan string dari Produk
+        $this->categories = Kategori::orderBy('nama_kategori', 'ASC')->get();
+    }
+
+    public function collection()
+    {
+        $period = CarbonPeriod::create($this->startDate, $this->endDate);
+        $data = [];
+
+        // Eager load detail.produk supaya hemat query
+        $transactions = Transaksi::with(['detail.produk'])
+            ->where('toko_id', $this->tokoId)
+            ->whereDate('tanggal', '>=', $this->startDate)
+            ->whereDate('tanggal', '<=', $this->endDate)
+            ->get();
+
+        foreach ($period as $date) {
+            $currentDate = $date->format('Y-m-d');
+
+            // Filter transaksi hari ini
+            $dailyTrx = $transactions->filter(function ($trx) use ($currentDate) {
+                return $trx->tanggal->format('Y-m-d') === $currentDate;
+            });
+
+            // Kolom 1: Tanggal
+            $row = [$currentDate];
+
+            $dailyTotalQty = 0;
+            $dailyTotalNet = 0;
+            $dailyTotalDiskon = 0;
+
+            // --- LOOP PER KATEGORI (Object Kategori) ---
+            foreach ($this->categories as $kategoriObj) {
+                $catQty = 0;
+                $catNet = 0;
+                $catDiskonShare = 0;
+
+                foreach ($dailyTrx as $trx) {
+                    $trxGrossTotal = $trx->detail->sum('subtotal');
+                    $trxDiscount = $trx->diskon_nominal;
+
+                    foreach ($trx->detail as $detail) {
+                        // --- UBAH LOGIC PENCOCOKAN ---
+                        // Cek apakah produk ada DAN kategori_id produk sama dengan ID kategori yang sedang di-loop
+                        if ($detail->produk && $detail->produk->kategori_id == $kategoriObj->id) {
+
+                            // 1. Hitung Proporsi Diskon
+                            $itemGross = $detail->subtotal;
+                            $contribution = $trxGrossTotal > 0 ? ($itemGross / $trxGrossTotal) : 0;
+                            $share = $contribution * $trxDiscount;
+
+                            // 2. Hitung Net
+                            $itemNet = $itemGross - $share;
+
+                            // 3. Akumulasi ke Kategori
+                            $catQty += $detail->qty;
+                            $catNet += $itemNet;
+                            $catDiskonShare += $share;
+                        }
+                    }
+                }
+
+                // Masukkan 3 Kolom per Kategori
+                $row[] = $catQty == 0 ? '' : $catQty;
+                $row[] = $catNet == 0 ? '' : $catNet;
+                $row[] = $catDiskonShare == 0 ? '' : $catDiskonShare;
+
+                // Akumulasi Total Harian
+                $dailyTotalQty += $catQty;
+                $dailyTotalNet += $catNet;
+                $dailyTotalDiskon += $catDiskonShare;
+            }
+
+            // --- TOTAL BARANG (Kanan) ---
+            $row[] = $dailyTotalQty;
+            $row[] = $dailyTotalNet;
+            $row[] = $dailyTotalDiskon;
+
+            // Spacer
+            $row[] = '';
+            $row[] = $currentDate;
+
+            // Cash & Non Cash
+            $cash = $dailyTrx->where('metode_pembayaran', 'cash')->sum('grand_total');
+            $nonCash = $dailyTrx->whereIn('metode_pembayaran', ['debit', 'qr'])->sum('grand_total');
+
+            $row[] = $cash;
+            $row[] = $nonCash;
+            $row[] = $cash + $nonCash;
+
+            $data[] = $row;
+        }
+
+        return collect($data);
+    }
+
+    public function headings(): array
+    {
+        $heading1 = ['LAPORAN KEUANGAN HARIAN DETAILED'];
+
+        // --- Header Baris 2 (Nama Kategori) ---
+        $heading2 = ['TANGGAL'];
+
+        // Loop objek kategori untuk ambil namanya
+        foreach ($this->categories as $kategoriObj) {
+            $heading2[] = strtoupper($kategoriObj->nama_kategori); // Pastikan kolom di DB 'nama_kategori'
+            $heading2[] = ''; // Spacer Merge
+            $heading2[] = ''; // Spacer Merge
+        }
+
+        // Header Statis Kanan
+        $heading2 = array_merge($heading2, [
+            'TOTAL SEMUA', '', '', '', 'TANGGAL', 'CASH', 'NON CASH', 'TOTAL SETORAN'
+        ]);
+
+        // --- Header Baris 3 (QTY, UANG, DISKON) ---
+        $heading3 = [''];
+        foreach ($this->categories as $kategoriObj) {
+            $heading3[] = 'QTY';
+            $heading3[] = 'UANG';
+            $heading3[] = 'DISKON';
+        }
+
+        // Sub-header Statis Kanan
+        $heading3 = array_merge($heading3, [
+            'QTY', 'UANG', 'DISKON', '', '', 'RP', 'RP', 'RP'
+        ]);
+
+        return [$heading1, $heading2, $heading3];
+    }
+
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            1 => ['font' => ['bold' => true, 'size' => 14], 'alignment' => ['horizontal' => 'center']],
+            2 => ['font' => ['bold' => true], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']],
+            3 => ['font' => ['bold' => true], 'alignment' => ['horizontal' => 'center']],
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function(AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+
+                // Hitung total kolom dinamis berdasarkan jumlah kategori
+                // $this->categories sekarang adalah Collection, jadi pakai ->count()
+                $lastColumnIndex = $this->categories->count() * 3 + 9;
+                $lastColumn = Coordinate::stringFromColumnIndex($lastColumnIndex);
+
+                // Merge Judul Utama
+                $sheet->mergeCells("A1:{$lastColumn}1");
+                $sheet->mergeCells('A2:A3'); // Tanggal Kiri
+
+                // --- MERGE HEADER KATEGORI ---
+                $colIndex = 2; // Mulai dari Kolom B
+                foreach ($this->categories as $cat) {
+                    $startCol = Coordinate::stringFromColumnIndex($colIndex);
+                    $endCol = Coordinate::stringFromColumnIndex($colIndex + 2); // Merge 3 Kolom
+
+                    $sheet->mergeCells("{$startCol}2:{$endCol}2");
+                    $colIndex += 3; // Lompat 3 langkah
+                }
+
+                // --- MERGE HEADER 'TOTAL SEMUA' ---
+                $startTotal = Coordinate::stringFromColumnIndex($colIndex);
+                $endTotal = Coordinate::stringFromColumnIndex($colIndex + 2);
+                $sheet->mergeCells("{$startTotal}2:{$endTotal}2");
+                $colIndex += 3;
+
+                // Style Border
+                $highestRow = $sheet->getHighestRow();
+                $styleArray = [
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        ],
+                    ],
+                ];
+                $sheet->getStyle("A2:{$lastColumn}{$highestRow}")->applyFromArray($styleArray);
+            },
+        ];
+    }
+}

@@ -12,11 +12,12 @@ import {
     CalendarIcon,
     BuildingStorefrontIcon,
     GlobeAsiaAustraliaIcon,
+    DocumentArrowDownIcon,
     PrinterIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
-// Helper Format Rupiah & Tanggal
+// Helper Format Rupiah
 const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -26,6 +27,7 @@ const formatRupiah = (number) => {
     }).format(number);
 };
 
+// Helper Format Tanggal
 const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
         day: 'numeric', month: 'short', year: 'numeric',
@@ -77,8 +79,19 @@ export default function Index({ transaksi, stats, filters, toko }) {
         router.get(route('transaksi.index'), {}, { preserveState: true });
     };
 
-    // Fungsi Fetch Detail Transaksi (Opsional jika data di tabel kurang lengkap, tapi di sini kita pakai data yg ada dulu)
-    // Jika perlu fetch ulang: gunakan axios.get ke route show
+    const handleExport = () => {
+        // Build query params manual agar bisa buka tab baru/download langsung
+        const params = new URLSearchParams({
+            start_date: filterValues.start_date,
+            end_date: filterValues.end_date,
+            // Opsional: kirim filter lain jika controller mendukung filter saat export
+            channel: filterValues.channel,
+            payment_method: filterValues.payment_method
+        }).toString();
+
+        window.location.href = route('transaksi.export') + '?' + params;
+    };
+
     const handleViewDetail = (item) => {
         setSelectedTrx(item);
     };
@@ -213,12 +226,20 @@ export default function Index({ transaksi, stats, filters, toko }) {
                                 </select>
                             </div>
                             <div className="col-span-1 md:col-span-2 space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal</label>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal & Aksi</label>
                                 <div className="flex gap-2 items-center">
                                     <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
                                     <span className="text-gray-300 font-bold">-</span>
                                     <input type="date" value={filterValues.end_date} onChange={(e) => handleFilter('end_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+
+                                    {/* Tombol Reset */}
                                     <button onClick={resetFilter} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200" title="Reset Filter"><ArrowPathIcon className="w-5 h-5" /></button>
+
+                                    {/* Tombol Export Excel */}
+                                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95" title="Export Excel">
+                                        <DocumentArrowDownIcon className="w-5 h-5" />
+                                        <span className="hidden md:inline">Export</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>

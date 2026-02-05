@@ -32,6 +32,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/produk/{id}', [ProdukController::class, 'update'])->name('produk.update');
     
     // Transaksi Routes
+        Route::get('/transaksi/export', [TransaksiController::class, 'export'])->name('transaksi.export');
     Route::resource('transaksi', TransaksiController::class);
     Route::get('/Laporan', [TransaksiController::class, 'index'])->name('transaksi.laporan');
     Route::get('/transaksi/export', [TransaksiController::class, 'export'])->name('transaksi.export');
