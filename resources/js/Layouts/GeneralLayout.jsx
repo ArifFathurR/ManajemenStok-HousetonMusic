@@ -20,9 +20,11 @@ import {
 export default function GeneralLayout({ header, children }) {
     const { url } = usePage();
     const user = usePage().props.auth.user;
-    const currentRoute = route().current();
 
-    // Class wrapper standar agar SEMUA konten sejajar rapi kiri-kanan
+    // Tidak perlu mengambil currentRoute sebagai string string manual
+    // Kita akan menggunakan helper route().current('nama.route*') langsung di object
+
+    // Class wrapper standar
     const containerClasses = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8";
 
     const mobileNavItems = [
@@ -31,28 +33,33 @@ export default function GeneralLayout({ header, children }) {
             href: route("dashboard"),
             icon: HomeIcon,
             iconSolid: HomeIconSolid,
-            active: currentRoute === "dashboard",
+            // Cek apakah route saat ini adalah 'dashboard'
+            active: route().current("dashboard"),
         },
         {
             name: "Produk",
             href: route("produk.index"),
             icon: ShoppingBagIcon,
             iconSolid: ShoppingBagIconSolid,
-            active: currentRoute?.startsWith("produk"),
+            // Cek apakah route dimulai dengan 'produk.' (index, create, edit, dll)
+            active: route().current("produk.*"),
         },
         {
             name: "Kasir",
             href: route("transaksi.create"),
             icon: CalculatorIcon,
             iconSolid: CalculatorIconSolid,
-            active: currentRoute?.startsWith("transaksi")
+            // Khusus Kasir, kita arahkan ke create, jadi active hanya jika di halaman create
+            // Atau jika sedang proses store (jarang terjadi karena redirect, tapi aman ditambahkan)
+            active: route().current("transaksi.create") || route().current("transaksi.store"),
         },
         {
             name: "Laporan",
-            href: "#",
+            href: route("transaksi.laporan"),
             icon: ChartBarIcon,
             iconSolid: ChartBarIconSolid,
-            active: false,
+            // Sesuai nama route di web.php: 'transaksi.laporan'
+            active: route().current("transaksi.laporan") || route().current("transaksi.index"),
         },
     ];
 
@@ -61,20 +68,25 @@ export default function GeneralLayout({ header, children }) {
             name: "Beranda",
             href: route("dashboard"),
             icon: Squares2X2Icon,
-            active: currentRoute === "dashboard",
+            active: route().current("dashboard"),
         },
         {
             name: "Produk",
             href: route("produk.index"),
             icon: ShoppingBagIcon,
-            active: currentRoute?.startsWith("produk"),
+            active: route().current("produk.*"),
         },
-        { name: "Kasir", href: route("transaksi.create"), icon: CalculatorIcon, active: currentRoute?.startsWith("transaksi"), },
+        {
+            name: "Kasir",
+            href: route("transaksi.create"),
+            icon: CalculatorIcon,
+            active: route().current("transaksi.create"),
+        },
         {
             name: "Laporan",
-            href: "#",
+            href: route("transaksi.laporan"),
             icon: DocumentChartBarIcon,
-            active: false,
+            active: route().current("transaksi.laporan") || route().current("transaksi.index"),
         },
     ];
 
@@ -93,16 +105,17 @@ export default function GeneralLayout({ header, children }) {
                             />
                         </div>
 
-                        {/* 2. Navigation Menu (Centered & Compact) */}
+                        {/* 2. Navigation Menu */}
                         <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100 flex items-center h-14">
                             {navItems.map((item) => (
                                 <Link
                                     key={item.name}
                                     href={item.href}
-                                    className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${item.active
+                                    className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                                        item.active
                                             ? "bg-gray-900 text-white shadow-md"
                                             : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-                                        }`}
+                                    }`}
                                 >
                                     {item.icon && (
                                         <item.icon
@@ -194,7 +207,6 @@ export default function GeneralLayout({ header, children }) {
 
                 {/* Group Kanan: Salam & Profile */}
                 <div className="flex items-center gap-3">
-                    {/* Salam Mobile + GIF */}
                     <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <span>
                             Halo,{" "}
@@ -209,7 +221,6 @@ export default function GeneralLayout({ header, children }) {
                         />
                     </div>
 
-                    {/* Mobile Profile Dropdown */}
                     <Dropdown>
                         <Dropdown.Trigger>
                             <button className="focus:outline-none relative">
@@ -246,7 +257,7 @@ export default function GeneralLayout({ header, children }) {
                 </div>
             </div>
 
-            {/* Header Content (Judul Halaman) */}
+            {/* Header Content */}
             {header && (
                 <header className="py-6">
                     <div className={containerClasses}>{header}</div>
@@ -280,17 +291,25 @@ export default function GeneralLayout({ header, children }) {
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`flex flex-col items-center justify-center w-full h-full transition-all duration-200 group ${item.active ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                            className={`flex flex-col items-center justify-center w-full h-full transition-all duration-200 group ${
+                                item.active
+                                    ? "text-gray-900"
+                                    : "text-gray-400 hover:text-gray-600"
+                            }`}
                         >
                             <div
-                                className={`p-1 rounded-xl transition-all ${item.active ? "bg-gray-100" : "group-active:scale-90"}`}
+                                className={`p-1 rounded-xl transition-all ${
+                                    item.active ? "bg-gray-100" : "group-active:scale-90"
+                                }`}
                             >
                                 <Icon
                                     className={`h-6 w-6 ${item.active ? "text-gray-900" : ""}`}
                                 />
                             </div>
                             <span
-                                className={`text-[10px] mt-0.5 font-medium ${item.active ? "font-bold" : ""}`}
+                                className={`text-[10px] mt-0.5 font-medium ${
+                                    item.active ? "font-bold" : ""
+                                }`}
                             >
                                 {item.name}
                             </span>

@@ -1,737 +1,435 @@
+import React, { useState } from 'react';
 import GeneralLayout from '@/Layouts/GeneralLayout';
-import { Head, usePage } from '@inertiajs/react';
-import React, { useState, useMemo } from 'react';
-import {
-    FiSearch, FiShoppingCart, FiTrash2, FiCreditCard,
-    FiSmartphone, FiDollarSign, FiPlus, FiMinus,
-    FiBox, FiX, FiPrinter, FiChevronUp, FiChevronDown,
-    FiAlertCircle, FiCheckCircle
-} from 'react-icons/fi';
-import axios from 'axios';
+import { Head, router } from '@inertiajs/react';
+import { 
+    MagnifyingGlassIcon,
+    EyeIcon,
+    XMarkIcon,
+    ArrowPathIcon,
+    PhotoIcon,
+    FunnelIcon,
+    ChevronDownIcon,
+    CalendarIcon,
+    BuildingStorefrontIcon,
+    GlobeAsiaAustraliaIcon
+} from '@heroicons/react/24/outline';
 
-export default function Index({ auth, products }) {
-    const { props } = usePage();
+// Helper Format Rupiah & Tanggal
+const formatRupiah = (number) => {
+    return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(number);
+};
 
-    // --- 1. STATE MANAGEMENT ---
-    const [cart, setCart] = useState([]);
-    const [search, setSearch] = useState('');
-    const [channel, setChannel] = useState('offline');
-    const [paymentMethod, setPaymentMethod] = useState('cash');
-    const [discount, setDiscount] = useState(0);
-    const [customerMoney, setCustomerMoney] = useState(0);
-    const [showReceipt, setShowReceipt] = useState(false);
-    const [isCartExpanded, setIsCartExpanded] = useState(false);
-    const [transactionId, setTransactionId] = useState("");
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [alertMessage, setAlertMessage] = useState(null);
-    const [selectedProduct, setSelectedProduct] = useState(null);
-    const [showVariantModal, setShowVariantModal] = useState(false);
+const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('id-ID', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+};
 
-    // State untuk tracking error gambar (fallback)
-    const [imageErrors, setImageErrors] = useState({});
-
-    // --- 2. LOGIC GAMBAR (Disederhanakan sesuai referensi) ---
-    const handleImageError = (productId) => {
-        setImageErrors(prev => ({ ...prev, [productId]: true }));
+// Component Badge Status
+const PaymentBadge = ({ method }) => {
+    const colors = {
+        cash: 'bg-green-100 text-green-700 border-green-200',
+        debit: 'bg-blue-100 text-blue-700 border-blue-200',
+        qr: 'bg-purple-100 text-purple-700 border-purple-200',
+        all: 'bg-gray-100 text-gray-700 border-gray-200'
     };
-
-    // --- 3. FILTER PRODUCTS ---
-    const filteredProducts = products.filter(p =>
-        p.nama_produk.toLowerCase().includes(search.toLowerCase()) ||
-        p.kategori?.toLowerCase().includes(search.toLowerCase())
+    return (
+        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${colors[method] || colors.all}`}>
+            {method}
+        </span>
     );
+};
 
-    // --- 4. LOGIC KERANJANG & VARIAN ---
-    const handleProductClick = (product) => {
-        // Cek stok
-        if (product.stok <= 0 && (!product.variants || product.variants.length === 0)) {
-            showAlert('Stok produk habis', 'error');
-            return;
-        }
+export default function Index({ transaksi, stats, filters }) {
+    const [selectedTrx, setSelectedTrx] = useState(null);
+    const [showFilters, setShowFilters] = useState(false);
+    
+    const [filterValues, setFilterValues] = useState({
+        channel: filters.channel || 'all',
+        payment_method: filters.payment_method || 'all',
+        start_date: filters.start_date || '',
+        end_date: filters.end_date || '',
+    });
 
-        if (product.variants && product.variants.length > 0) {
-            setSelectedProduct(product);
-            setShowVariantModal(true);
-        } else {
-            addToCart(product, null);
-        }
+    const handleFilter = (key, value) => {
+        const newFilters = { ...filterValues, [key]: value };
+        setFilterValues(newFilters);
+        
+        router.get(route('transaksi.index'), newFilters, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true
+        });
     };
 
-    const addToCart = (product, variant) => {
-        const variantId = variant ? variant.id : null;
-        const cartItemId = variant ? `${product.id}-${variant.id}` : `${product.id}`;
-
-        // Cek stok yang dipilih
-        const availableStock = variant ? variant.stok : product.stok;
-
-        const existing = cart.find(item => item.cartItemId === cartItemId);
-        const currentQty = existing ? existing.qty : 0;
-
-        if (currentQty >= availableStock) {
-            showAlert(`Stok tidak mencukupi. Tersedia: ${availableStock}`, 'error');
-            return;
-        }
-
-        if (existing) {
-            setCart(cart.map(item =>
-                item.cartItemId === cartItemId
-                    ? { ...item, qty: item.qty + 1 }
-                    : item
-            ));
-        } else {
-            setCart([...cart, {
-                ...product,
-                cartItemId,
-                variantId,
-                variantName: variant ? variant.name : null,
-                qty: 1,
-                stok: availableStock,
-                harga_online: variant ? variant.harga_online : product.harga_online,
-                harga_offline: variant ? variant.harga_offline : product.harga_offline,
-            }]);
-        }
-        setShowVariantModal(false);
-        showAlert('Produk ditambahkan ke keranjang', 'success');
-    };
-
-    const updateQty = (cartItemId, delta) => {
-        setCart(cart.map(item => {
-            if (item.cartItemId === cartItemId) {
-                const newQty = item.qty + delta;
-
-                // Validasi stok
-                if (newQty > item.stok) {
-                    showAlert(`Stok tidak mencukupi. Tersedia: ${item.stok}`, 'error');
-                    return item;
-                }
-
-                if (newQty < 1) {
-                    return null; // Akan di-filter
-                }
-
-                return { ...item, qty: newQty };
-            }
-            return item;
-        }).filter(item => item !== null));
-    };
-
-    const removeFromCart = (cartItemId) => {
-        setCart(cart.filter(item => item.cartItemId !== cartItemId));
-    };
-
-    // --- 5. KALKULASI ---
-    const subtotal = useMemo(() => {
-        return cart.reduce((acc, item) => {
-            const harga = channel === 'online' ? item.harga_online : item.harga_offline;
-            return acc + (harga * item.qty);
-        }, 0);
-    }, [cart, channel]);
-
-    const grandTotal = Math.max(0, subtotal - discount);
-    const change = useMemo(() => {
-        return paymentMethod === 'cash' && customerMoney >= grandTotal
-            ? customerMoney - grandTotal
-            : 0;
-    }, [customerMoney, grandTotal, paymentMethod]);
-
-    const quickAmounts = [50000, 100000, 200000, 500000];
-
-    // --- 6. ALERT SYSTEM ---
-    const showAlert = (message, type = 'info') => {
-        setAlertMessage({ message, type });
-        setTimeout(() => setAlertMessage(null), 3000);
-    };
-
-    // --- 7. PROSES TRANSAKSI ---
-    const handleFinalize = async () => {
-        if (cart.length === 0) {
-            showAlert('Keranjang masih kosong', 'error');
-            return;
-        }
-
-        if (paymentMethod === 'cash' && customerMoney < grandTotal) {
-            showAlert('Uang pembayaran tidak mencukupi', 'error');
-            return;
-        }
-
-        setIsProcessing(true);
-
-        // Prepare data
-        const transactionData = {
-            cart: cart.map(item => ({
-                id: item.id,
-                variantId: item.variantId,
-                qty: item.qty
-            })),
-            channel,
-            paymentMethod,
-            discount,
-            customerMoney: paymentMethod === 'cash' ? customerMoney : grandTotal
-        };
-
-        try {
-            const response = await axios.post(route('transaksi.store'), transactionData);
-
-            if (response.data.success) {
-                setTransactionId(response.data.transaksi_id);
-                setShowReceipt(true);
-                showAlert('Transaksi berhasil diproses', 'success');
-            } else {
-                showAlert(response.data.message || 'Transaksi gagal', 'error');
-            }
-        } catch (error) {
-            console.error('Transaction error:', error);
-            if (error.response && error.response.data) {
-                const errorMessage = error.response.data.message || 'Terjadi kesalahan saat memproses transaksi';
-                showAlert(errorMessage, 'error');
-            } else {
-                showAlert('Terjadi kesalahan saat memproses transaksi', 'error');
-            }
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const resetTransaction = () => {
-        setCart([]);
-        setDiscount(0);
-        setCustomerMoney(0);
-        setShowReceipt(false);
-        setIsCartExpanded(false);
-        setChannel('offline');
-        setPaymentMethod('cash');
+    const resetFilter = () => {
+        setFilterValues({ channel: 'all', payment_method: 'all', start_date: '', end_date: '' });
+        router.get(route('transaksi.index'), {}, { preserveState: true });
     };
 
     return (
-        <GeneralLayout>
-            <Head title="Kasir - Manajemen Stok" />
+        <GeneralLayout header={<h2 className="font-bold text-xl md:text-2xl text-gray-800 px-1">Laporan Penjualan</h2>}>
+            <Head title="Laporan Transaksi" />
 
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                @media print {
-                    body * { visibility: hidden; }
-                    .print-area, .print-area * { visibility: visible; }
-                    .print-area { position: absolute; left: 0; top: 0; width: 100% !important; margin: 0; padding: 0; }
-                    .no-print { display: none !important; }
-                }
-            `}} />
-
-            {/* Alert Notification */}
-            {alertMessage && (
-                <div className={`fixed top-4 right-4 z-[200] animate-in slide-in-from-top duration-300 ${
-                    alertMessage.type === 'error' ? 'bg-red-500' :
-                    alertMessage.type === 'success' ? 'bg-green-500' : 'bg-blue-500'
-                } text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 max-w-md`}>
-                    {alertMessage.type === 'error' ? <FiAlertCircle size={20} /> : <FiCheckCircle size={20} />}
-                    <span className="font-bold text-sm">{alertMessage.message}</span>
-                </div>
-            )}
-
-            <div className="flex flex-col lg:flex-row h-[calc(100vh-180px)] md:h-[calc(100vh-120px)] overflow-hidden font-sans text-slate-800 bg-white rounded-[2rem] shadow-sm border border-gray-100">
-
-                {/* --- SISI KIRI: KATALOG --- */}
-                <div className="flex-grow flex flex-col h-full overflow-hidden border-r border-slate-100 print:hidden">
-                    <header className="bg-white p-4 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 border-b border-slate-100">
-                        <div className="flex bg-slate-100 rounded-2xl p-1 w-full sm:w-auto border border-slate-200/50">
-                            <button
-                                onClick={() => setChannel('offline')}
-                                className={`flex-1 px-6 py-2 text-[10px] font-black rounded-xl transition-all duration-300 ${
-                                    channel === 'offline' ? 'bg-black text-white shadow-lg' : 'text-slate-400'
-                                }`}
-                            >
-                                OFFLINE
-                            </button>
-                            <button
-                                onClick={() => setChannel('online')}
-                                className={`flex-1 px-6 py-2 text-[10px] font-black rounded-xl transition-all duration-300 ${
-                                    channel === 'online' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'
-                                }`}
-                            >
-                                ONLINE
-                            </button>
+            {/* --- 1. STATISTIK CARDS (GRID LAYOUT) --- */}
+            <div className="grid grid-cols-2 gap-3 md:gap-6 mb-6">
+                {/* Card Offline */}
+                <div className="relative overflow-hidden bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-2 bg-gray-50 rounded-xl">
+                            <BuildingStorefrontIcon className="w-6 h-6 text-gray-600" />
                         </div>
-                        <div className="relative group w-full sm:w-64">
-                            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
-                            <input
-                                type="text"
-                                placeholder="Cari produk atau kategori..."
-                                className="w-full bg-slate-50 border-none rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-black transition-all shadow-inner"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-                    </header>
-
-                    <div className="p-6 overflow-y-auto flex-grow space-y-6 no-scrollbar pb-32 lg:pb-6">
-                        {filteredProducts.length === 0 ? (
-                            <div className="text-center py-20 text-slate-400">
-                                <FiBox size={48} className="mx-auto mb-4 opacity-20" />
-                                <p className="font-bold">Produk tidak ditemukan</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                                {filteredProducts.map(product => {
-                                    // LOGIC: Sederhana saja, jika ada gambar_utama, kasih prefix /storage/
-                                    const hasError = imageErrors[product.id];
-                                    
-                                    return (
-                                        <div
-                                            key={product.id}
-                                            onClick={() => handleProductClick(product)}
-                                            className={`bg-white p-4 rounded-[2rem] border transition-all duration-300 cursor-pointer group flex flex-col active:scale-95 shadow-sm ${
-                                                product.stok <= 0 && !product.is_variant 
-                                                    ? 'border-red-200 opacity-50' 
-                                                    : 'border-slate-100 hover:border-black'
-                                            }`}
-                                        >
-                                            {/* AREA GAMBAR PRODUK */}
-                                            <div className="aspect-square bg-slate-50 rounded-[1.5rem] mb-4 overflow-hidden flex items-center justify-center text-slate-200 group-hover:bg-slate-100 transition-colors relative">
-                                                {product.gambar_utama && !hasError ? (
-                                                    <img
-                                                        src={`/storage/${product.gambar_utama}`} // FIX DISINI: Langsung concat /storage/
-                                                        alt={product.nama_produk}
-                                                        className="w-full h-full object-contain p-2 mix-blend-multiply group-hover:scale-110 transition-transform duration-500"
-                                                        onError={() => handleImageError(product.id)}
-                                                        loading="lazy"
-                                                    />
-                                                ) : (
-                                                    // Fallback Icon jika tidak ada gambar atau error
-                                                    <div className="flex flex-col items-center justify-center text-slate-300">
-                                                        <FiBox size={32} className="opacity-20" />
-                                                        {hasError && (
-                                                            <span className="text-[8px] mt-2 text-slate-400 font-bold">
-                                                                No Image
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* Overlay Stok Habis */}
-                                                {product.stok <= 0 && !product.is_variant && (
-                                                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
-                                                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-full shadow-lg">
-                                                            HABIS
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <h4 className="font-bold text-xs text-slate-900 truncate leading-tight mb-1 uppercase tracking-tight">
-                                                {product.nama_produk}
-                                            </h4>
-                                            <div className="flex justify-between items-end mt-auto">
-                                                <span className="font-[900] text-sm text-slate-900 leading-none">
-                                                    Rp {(channel === 'online' ? product.harga_online : product.harga_offline).toLocaleString()}
-                                                </span>
-                                                {product.is_variant ? (
-                                                    <span className="bg-orange-100 text-orange-600 text-[8px] font-black px-2 py-0.5 rounded-full uppercase">
-                                                        VARIAN
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-[10px] font-bold text-slate-300 italic">
-                                                        {product.stok} {product.satuan}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full uppercase tracking-wider">
+                            Offline
+                        </span>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-400 font-medium mb-1">Total Pendapatan (7 Hari)</p>
+                        <h3 className="text-lg md:text-2xl font-black text-gray-900 truncate">
+                            {formatRupiah(stats.total_offline)}
+                        </h3>
+                    </div>
+                    {/* Hiasan Background */}
+                    <div className="absolute -right-6 -bottom-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <BuildingStorefrontIcon className="w-32 h-32 text-gray-900" />
                     </div>
                 </div>
 
-                {/* --- SISI KANAN & MOBILE DRAWER: KERANJANG --- */}
-                <div className={`fixed lg:static inset-x-0 bottom-0 z-40 bg-white border-l border-slate-100 flex flex-col transition-all mb-11 duration-700 ease-in-out print:hidden ${
-                    isCartExpanded ? 'h-[85vh]' : 'h-[80px] lg:h-full lg:w-[400px] xl:w-[450px]'
-                }`}>
-
-                    {/* Handler Mobile */}
-                    <div
-                        className="p-4 md:p-6 border-b border-slate-50 flex justify-between items-center cursor-pointer lg:cursor-default shrink-0"
-                        onClick={() => window.innerWidth < 1024 && setIsCartExpanded(!isCartExpanded)}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200">
-                                <FiShoppingCart size={18} />
-                            </div>
-                            <div>
-                                <h3 className="font-black text-xs italic uppercase tracking-tighter">Order List</h3>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{cart.length} Items</p>
-                            </div>
+                {/* Card Online */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-blue-800 p-5 rounded-2xl shadow-lg shadow-blue-200 transition-all group text-white">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                            <GlobeAsiaAustraliaIcon className="w-6 h-6 text-white" />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (cart.length > 0 && confirm('Hapus semua item dari keranjang?')) {
-                                        setCart([]);
-                                    }
-                                }}
-                                className="lg:flex hidden text-red-500 hover:bg-red-50 p-2 rounded-xl active:scale-90"
+                        <span className="text-[10px] font-bold bg-white/20 backdrop-blur-md text-white px-2 py-1 rounded-full uppercase tracking-wider">
+                            Online
+                        </span>
+                    </div>
+                    <div>
+                        <p className="text-xs text-blue-100 font-medium mb-1">Total Pendapatan (7 Hari)</p>
+                        <h3 className="text-lg md:text-2xl font-black text-white truncate">
+                            {formatRupiah(stats.total_online)}
+                        </h3>
+                    </div>
+                    {/* Hiasan Background */}
+                    <div className="absolute -right-6 -bottom-6 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <GlobeAsiaAustraliaIcon className="w-32 h-32 text-white" />
+                    </div>
+                </div>
+            </div>
+
+            {/* 2. FILTER SECTION (Collapsible di Mobile) */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 md:mb-6 overflow-hidden">
+                <div 
+                    className="p-4 flex justify-between items-center cursor-pointer md:cursor-default hover:bg-gray-50 transition-colors"
+                    onClick={() => setShowFilters(!showFilters)}
+                >
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-gray-100 rounded-lg">
+                            <FunnelIcon className="w-4 h-4 text-gray-600" />
+                        </div>
+                        <span className="font-bold text-sm text-gray-700">Filter Data</span>
+                        {/* Badge indikator filter aktif */}
+                        {(filterValues.channel !== 'all' || filterValues.payment_method !== 'all' || filterValues.start_date) && (
+                            <span className="flex items-center gap-1 bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                Aktif
+                            </span>
+                        )}
+                    </div>
+                    <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform duration-300 md:hidden ${showFilters ? 'rotate-180' : ''}`} />
+                </div>
+
+                <div className={`px-4 pb-4 md:pt-4 transition-all duration-300 ease-in-out ${showFilters ? 'block opacity-100' : 'hidden md:block opacity-0 md:opacity-100'}`}>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end pt-2 border-t border-gray-50 md:border-0">
+                        {/* Dropdown Channel */}
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Channel</label>
+                            <select 
+                                value={filterValues.channel}
+                                onChange={(e) => handleFilter('channel', e.target.value)}
+                                className="w-full border-gray-200 rounded-xl text-sm font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50"
                             >
-                                <FiTrash2 size={18} />
-                            </button>
-                            <div className="lg:hidden text-slate-300 animate-bounce">
-                                {isCartExpanded ? <FiChevronDown size={20} /> : <FiChevronUp size={20} />}
-                            </div>
+                                <option value="all">Semua Channel</option>
+                                <option value="offline">Offline Store</option>
+                                <option value="online">Online Store</option>
+                            </select>
                         </div>
-                    </div>
 
-                    {/* List Item Keranjang */}
-                    <div className={`flex-grow overflow-y-auto p-6 space-y-4 no-scrollbar ${!isCartExpanded && 'hidden lg:block'}`}>
-                        {cart.length === 0 ? (
-                            <div className="text-center py-20 text-slate-300">
-                                <FiShoppingCart size={48} className="mx-auto mb-4 opacity-20" />
-                                <p className="font-bold text-sm">Keranjang Kosong</p>
-                            </div>
-                        ) : (
-                            cart.map(item => (
-                                <div key={item.cartItemId} className="flex justify-between items-center bg-slate-50/50 p-4 rounded-[1.5rem] border border-slate-100 group">
-                                    <div className="max-w-[60%]">
-                                        <p className="text-xs font-[900] text-slate-900 leading-tight truncate uppercase tracking-tight">
-                                            {item.nama_produk}
-                                        </p>
-                                        {item.variantName && (
-                                            <p className="text-[9px] text-blue-600 font-bold uppercase mt-0.5 tracking-wider">
-                                                Varian: {item.variantName}
-                                            </p>
-                                        )}
-                                        <p className="text-[10px] font-bold text-slate-400 mt-1 italic uppercase tracking-tighter">
-                                            @ Rp {(channel === 'online' ? item.harga_online : item.harga_offline).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-100 shadow-sm">
-                                            <button
-                                                onClick={() => updateQty(item.cartItemId, -1)}
-                                                className="text-red-500 p-1 hover:bg-red-50 rounded"
-                                            >
-                                                <FiMinus size={12} />
-                                            </button>
-                                            <span className="text-xs font-black min-w-[20px] text-center">{item.qty}</span>
-                                            <button
-                                                onClick={() => updateQty(item.cartItemId, 1)}
-                                                className="text-blue-500 p-1 hover:bg-blue-50 rounded"
-                                            >
-                                                <FiPlus size={12} />
-                                            </button>
-                                        </div>
-                                        <button
-                                            onClick={() => removeFromCart(item.cartItemId)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 text-[8px] font-bold uppercase"
-                                        >
-                                            Hapus
-                                        </button>
-                                    </div>
+                        {/* Dropdown Payment */}
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Pembayaran</label>
+                            <select 
+                                value={filterValues.payment_method}
+                                onChange={(e) => handleFilter('payment_method', e.target.value)}
+                                className="w-full border-gray-200 rounded-xl text-sm font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50"
+                            >
+                                <option value="all">Semua Metode</option>
+                                <option value="cash">Tunai (Cash)</option>
+                                <option value="debit">Debit Card</option>
+                                <option value="qr">QRIS</option>
+                            </select>
+                        </div>
+
+                        {/* Date Range */}
+                        <div className="col-span-1 md:col-span-2 space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal</label>
+                            <div className="flex gap-2 items-center">
+                                <div className="relative flex-1">
+                                    <input 
+                                        type="date" 
+                                        value={filterValues.start_date}
+                                        onChange={(e) => handleFilter('start_date', e.target.value)}
+                                        className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50"
+                                    />
                                 </div>
-                            ))
-                        )}
-                    </div>
-
-                    {/* Ringkasan Pembayaran */}
-                    <div className={`p-6 md:p-8 bg-slate-50/80 backdrop-blur-lg border-t border-slate-200 lg:rounded-none rounded-t-[2.5rem] space-y-4 shadow-inner ${
-                        !isCartExpanded && 'hidden lg:block'
-                    }`}>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm focus-within:border-black transition-colors">
-                                <label className="text-[9px] font-black text-slate-300 uppercase block mb-1">Diskon (Rp)</label>
-                                <input
-                                    type="number"
-                                    className="w-full bg-transparent border-none p-0 font-black text-sm focus:ring-0"
-                                    value={discount || ''}
-                                    onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm focus-within:border-blue-600 transition-colors">
-                                <label className="text-[9px] font-black text-blue-400 uppercase block mb-1 tracking-widest">
-                                    Bayar (Rp)
-                                </label>
-                                <input
-                                    type="number"
-                                    className="w-full bg-transparent border-none p-0 font-black text-sm focus:ring-0 text-blue-600"
-                                    value={customerMoney || ''}
-                                    onChange={(e) => setCustomerMoney(Number(e.target.value) || 0)}
-                                    placeholder="0"
-                                    disabled={paymentMethod !== 'cash'}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Tombol Cepat Nominal */}
-                        {paymentMethod === 'cash' && (
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                                {quickAmounts.map(amount => (
-                                    <button
-                                        key={amount}
-                                        onClick={() => setCustomerMoney(amount)}
-                                        className="whitespace-nowrap px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black hover:bg-black hover:text-white transition-all shadow-sm"
-                                    >
-                                        +{(amount / 1000).toFixed(0)}K
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={() => setCustomerMoney(grandTotal)}
-                                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform"
+                                <span className="text-gray-300 font-bold">-</span>
+                                <div className="relative flex-1">
+                                    <input 
+                                        type="date" 
+                                        value={filterValues.end_date}
+                                        onChange={(e) => handleFilter('end_date', e.target.value)}
+                                        className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={resetFilter}
+                                    className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200"
+                                    title="Reset Filter"
                                 >
-                                    PAS
+                                    <ArrowPathIcon className="w-5 h-5" />
                                 </button>
                             </div>
-                        )}
-
-                        <div className="pt-2 border-t border-slate-200 space-y-1">
-                            <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase italic">
-                                <span>Subtotal</span>
-                                <span className="text-slate-900">Rp {subtotal.toLocaleString()}</span>
-                            </div>
-                            {discount > 0 && (
-                                <div className="flex justify-between items-center text-[10px] font-black text-red-500 uppercase italic">
-                                    <span>Diskon</span>
-                                    <span>- Rp {discount.toLocaleString()}</span>
-                                </div>
-                            )}
-                            <div className="flex justify-between items-center font-black text-lg italic tracking-tighter uppercase text-slate-400 pt-2 border-t border-slate-100">
-                                <span>Grand Total</span>
-                                <span className="text-black text-3xl font-[900] tracking-tighter italic leading-none">
-                                    Rp {grandTotal.toLocaleString()}
-                                </span>
-                            </div>
-                            {paymentMethod === 'cash' && customerMoney > 0 && (
-                                <div className="flex justify-between items-center text-[10px] font-black uppercase italic pt-2">
-                                    <span className={change >= 0 ? 'text-green-600' : 'text-red-500'}>Kembalian</span>
-                                    <span className={change >= 0 ? 'text-green-600 font-[900]' : 'text-red-500 font-bold'}>
-                                        Rp {change.toLocaleString()}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Metode Pembayaran */}
-                        <div className="grid grid-cols-3 gap-2 py-2">
-                            {[
-                                { id: 'cash', label: 'CASH', icon: FiDollarSign },
-                                { id: 'debit', label: 'DEBIT', icon: FiCreditCard },
-                                { id: 'qr', label: 'QRIS', icon: FiSmartphone }
-                            ].map(method => (
-                                <button
-                                    key={method.id}
-                                    onClick={() => {
-                                        setPaymentMethod(method.id);
-                                        if (method.id !== 'cash') {
-                                            setCustomerMoney(grandTotal);
-                                        }
-                                    }}
-                                    className={`flex flex-col items-center py-3 rounded-[1.2rem] border-2 transition-all duration-300 ${
-                                        paymentMethod === method.id
-                                            ? 'bg-black text-white border-black shadow-2xl scale-105'
-                                            : 'bg-white border-slate-100 text-slate-300 hover:border-slate-200'
-                                    }`}
-                                >
-                                    <method.icon size={18} />
-                                    <span className="text-[8px] font-black tracking-widest uppercase mt-1.5">
-                                        {method.label}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-
-                        <button
-                            disabled={cart.length === 0 || (paymentMethod === 'cash' && customerMoney < grandTotal) || isProcessing}
-                            onClick={handleFinalize}
-                            className={`w-full py-5 rounded-[2rem] font-black text-sm tracking-[0.1em] transition-all duration-500 shadow-sm ${
-                                cart.length === 0 || (paymentMethod === 'cash' && customerMoney < grandTotal) || isProcessing
-                                    ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                                    : 'bg-black text-white hover:bg-slate-800 active:scale-95 shadow-black/20'
-                            }`}
-                        >
-                            {isProcessing ? 'MEMPROSES...' :
-                                paymentMethod === 'cash' && customerMoney < grandTotal && cart.length > 0 ? 'UANG KURANG' :
-                                    'PROSES TRANSAKSI'}
-                        </button>
-                    </div>
-
-                    {/* Mobile Footer Preview */}
-                    <div className={`lg:hidden flex justify-between items-center px-8 py-4 h-[80px] shrink-0 ${isCartExpanded && 'hidden'}`}
-                        onClick={() => setIsCartExpanded(true)}>
-                        <h4 className="font-black text-xl tracking-tighter italic text-black leading-none">
-                            Rp {grandTotal.toLocaleString()}
-                        </h4>
-                        <div className="bg-black text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-black/20">
-                            Review Cart
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* --- MODAL PILIH VARIAN --- */}
-            {showVariantModal && selectedProduct && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="font-[900] text-xl leading-tight uppercase italic text-slate-900">
-                                    {selectedProduct.nama_produk}
-                                </h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">
-                                    Pilih Varian Produk
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setShowVariantModal(false)}
-                                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
-                            >
-                                <FiX />
-                            </button>
+            {/* 3. LIST TRANSAKSI */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
+                {transaksi.data.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-64 text-gray-400 p-6 text-center">
+                        <div className="bg-gray-50 p-4 rounded-full mb-3">
+                            <MagnifyingGlassIcon className="w-8 h-8 opacity-50" />
                         </div>
-                        <div className="grid grid-cols-1 gap-2">
-                            {selectedProduct.variants.map(variant => (
-                                <button
-                                    key={variant.id}
-                                    onClick={() => addToCart(selectedProduct, variant)}
-                                    disabled={variant.stok <= 0}
-                                    className={`flex items-center justify-between gap-4 p-4 rounded-2xl border-2 transition-all group text-left ${
-                                        variant.stok <= 0
-                                            ? 'border-slate-100 opacity-50 cursor-not-allowed'
-                                            : 'border-slate-50 hover:border-black active:scale-95'
-                                    }`}
+                        <p className="font-medium">Tidak ada transaksi ditemukan</p>
+                        <p className="text-xs mt-1">Coba ubah filter pencarian Anda</p>
+                    </div>
+                ) : (
+                    <>
+                        {/* --- DESKTOP TABLE --- */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-6 py-4 font-bold text-gray-500 uppercase text-xs tracking-wider">Info Transaksi</th>
+                                        <th className="px-6 py-4 font-bold text-gray-500 uppercase text-xs tracking-wider">Metode</th>
+                                        <th className="px-6 py-4 font-bold text-gray-500 uppercase text-xs tracking-wider text-right">Total</th>
+                                        <th className="px-6 py-4 font-bold text-gray-500 uppercase text-xs tracking-wider text-center">Detail</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {transaksi.data.map((item) => (
+                                        <tr key={item.id} className="hover:bg-gray-50/30 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-1 h-8 rounded-full ${item.channel === 'online' ? 'bg-blue-500' : 'bg-gray-800'}`}></div>
+                                                    <div>
+                                                        <p className="font-bold text-gray-900">#{item.id}</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                                            <CalendarIcon className="w-3 h-3" />
+                                                            {formatDate(item.tanggal)} • {item.user?.name || '-'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <PaymentBadge method={item.metode_pembayaran} />
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="font-black text-gray-900">{formatRupiah(item.grand_total)}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <button 
+                                                    onClick={() => setSelectedTrx(item)}
+                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                >
+                                                    <EyeIcon className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* --- MOBILE CARD LIST --- */}
+                        <div className="md:hidden divide-y divide-gray-100">
+                            {transaksi.data.map((item) => (
+                                <div 
+                                    key={item.id} 
+                                    className="p-4 active:bg-gray-50 transition-colors cursor-pointer"
+                                    onClick={() => setSelectedTrx(item)}
                                 >
-                                    {/* Handle gambar varian juga dengan cara yang sama */}
-                                    <div className="flex items-center gap-3">
-                                        {variant.gambar && (
-                                            <div className="w-10 h-10 bg-slate-50 rounded-lg overflow-hidden shrink-0">
-                                                <img 
-                                                    src={`/storage/${variant.gambar}`} 
-                                                    alt={variant.name} 
-                                                    className="w-full h-full object-cover" 
-                                                />
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex gap-3">
+                                            {/* Indikator Channel */}
+                                            <div className={`w-1.5 self-stretch rounded-full ${item.channel === 'online' ? 'bg-blue-500' : 'bg-gray-800'}`}></div>
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="font-bold text-gray-900 text-sm">#{item.id}</span>
+                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${item.channel === 'online' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                                                        {item.channel}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                    <CalendarIcon className="w-3 h-3" />
+                                                    {formatDate(item.tanggal)}
+                                                </p>
                                             </div>
-                                        )}
-                                        <span className="font-black text-xs uppercase tracking-tight group-hover:translate-x-1 transition-transform">
-                                            {variant.name}
-                                        </span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="block font-black text-gray-900 text-base">{formatRupiah(item.grand_total)}</span>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-[9px] text-slate-400 font-bold">
-                                            Stok: {variant.stok}
-                                        </p>
-                                        <p className="text-xs font-black text-slate-900">
-                                            Rp {(channel === 'online' ? variant.harga_online : variant.harga_offline).toLocaleString()}
-                                        </p>
+                                    
+                                    <div className="flex justify-between items-center border-t border-gray-50 pt-3 pl-4">
+                                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                                            <span>Kasir:</span>
+                                            <span className="font-medium text-gray-700">{item.user?.name || '-'}</span>
+                                        </div>
+                                        <PaymentBadge method={item.metode_pembayaran} />
                                     </div>
-                                </button>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
+
+                {/* Pagination */}
+                {transaksi.links.length > 3 && (
+                    <div className="flex justify-center p-6 border-t border-gray-100 bg-gray-50/30">
+                        <div className="flex gap-1 flex-wrap justify-center">
+                            {transaksi.links.map((link, key) => (
+                                link.url ? (
+                                    <button
+                                        key={key}
+                                        onClick={() => router.get(link.url, filterValues, { preserveState: true, preserveScroll: true })}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            link.active 
+                                            ? 'bg-black text-white shadow-md transform scale-105' 
+                                            : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+                                        }`}
+                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                    />
+                                ) : (
+                                    <span 
+                                        key={key} 
+                                        className="px-3 py-1.5 text-xs text-gray-300"
+                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                    />
+                                )
                             ))}
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
-            {/* --- MODAL STRUK --- */}
-            {showReceipt && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 print:bg-white print:p-0 print:static transition-all">
-                    <div className="print-area bg-white w-full max-w-sm rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 print:shadow-none print:w-full print:rounded-none">
-                        <div className="p-8 space-y-6 text-slate-800">
-                            <div className="text-center space-y-1">
-                                <h2 className="font-[900] text-2xl italic tracking-tighter uppercase leading-none">
-                                    {auth.user.name || 'Toko Saya'}
-                                </h2>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em] italic">
-                                    Struk Pembayaran
+            {/* --- MODAL DETAIL TRANSAKSI --- */}
+            {selectedTrx && (
+                <div 
+                    className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 transition-all"
+                    onClick={() => setSelectedTrx(null)}
+                >
+                    <div 
+                        className="bg-white w-full md:max-w-lg md:rounded-3xl rounded-t-[2rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom md:zoom-in-95 duration-300 max-h-[90vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Drag Handle Mobile */}
+                        <div className="md:hidden flex justify-center pt-3 pb-1" onClick={() => setSelectedTrx(null)}>
+                            <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+                        </div>
+
+                        {/* Modal Header */}
+                        <div className="bg-white px-6 pb-4 pt-2 md:pt-6 border-b border-gray-100 flex justify-between items-start sticky top-0 z-10">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Detail Transaksi</p>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-2xl font-black text-gray-900">#{selectedTrx.id}</h3>
+                                    <PaymentBadge method={selectedTrx.metode_pembayaran} />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                    <CalendarIcon className="w-3 h-3" />
+                                    {formatDate(selectedTrx.tanggal)}
                                 </p>
-                                <div className="border-b border-dashed border-slate-200 pt-4"></div>
                             </div>
-                            <div className="text-[9px] font-bold text-slate-400 uppercase space-y-1 tracking-tight">
-                                <div className="flex justify-between">
-                                    <span>No. Transaksi</span>
-                                    <span className="text-slate-900">#{transactionId}</span>
-                                </div>
-                                <div className="flex justify-between font-black text-blue-600 tracking-widest italic">
-                                    <span>Channel</span>
-                                    <span>{channel.toUpperCase()}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Kasir</span>
-                                    <span className="text-slate-900">{auth.user.name}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Tanggal</span>
-                                    <span className="text-slate-900 italic font-medium">
-                                        {new Date().toLocaleString('id-ID')}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="border-b border-dashed border-slate-200"></div>
+                            <button 
+                                onClick={() => setSelectedTrx(null)}
+                                className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all shadow-sm"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body: List Produk */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 custom-scrollbar">
                             <div className="space-y-4">
-                                {cart.map(item => (
-                                    <div key={item.cartItemId} className="text-xs font-bold leading-tight uppercase tracking-tight text-slate-700">
-                                        <div className="flex justify-between mb-1">
-                                            <span className="max-w-[70%]">
-                                                {item.nama_produk} {item.variantName && `(${item.variantName})`}
-                                            </span>
-                                            <span>
-                                                Rp {(item.qty * (channel === 'online' ? item.harga_online : item.harga_offline)).toLocaleString()}
-                                            </span>
+                                {selectedTrx.detail?.map((detail, index) => (
+                                    <div key={index} className="flex gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                        {/* Gambar Produk */}
+                                        <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center">
+                                            {detail.produk?.gambar_utama ? (
+                                                <img 
+                                                    src={`/storage/${detail.produk.gambar_utama}`} 
+                                                    alt={detail.produk.nama_produk}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+                                                />
+                                            ) : (
+                                                <PhotoIcon className="w-6 h-6 text-gray-300" />
+                                            )}
+                                            <PhotoIcon className="w-6 h-6 text-gray-300 hidden" />
                                         </div>
-                                        <p className="text-[9px] text-slate-400 italic lowercase">
-                                            {item.qty} x Rp {(channel === 'online' ? item.harga_online : item.harga_offline).toLocaleString()}
-                                        </p>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight mb-1">
+                                                {detail.produk?.nama_produk || 'Produk Dihapus'}
+                                            </p>
+                                            <div className="flex justify-between items-end">
+                                                <p className="text-xs text-gray-500">
+                                                    {detail.qty} x <span className="font-medium">{formatRupiah(detail.harga_satuan)}</span>
+                                                </p>
+                                                <p className="text-sm font-black text-gray-900">
+                                                    {formatRupiah(detail.subtotal)}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                            <div className="border-b border-dashed border-slate-200 pt-2"></div>
-                            <div className="space-y-1 text-xs font-bold uppercase tracking-widest text-slate-500">
-                                <div className="flex justify-between text-slate-400">
-                                    <span>Subtotal</span>
-                                    <span>Rp {subtotal.toLocaleString()}</span>
-                                </div>
-                                {discount > 0 && (
-                                    <div className="flex justify-between text-red-500 italic">
-                                        <span>Diskon</span>
-                                        <span>- Rp {discount.toLocaleString()}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between font-[900] text-2xl pt-4 italic text-black leading-none border-t border-slate-100 tracking-tighter uppercase">
-                                    <span>Total</span>
-                                    <span>Rp {grandTotal.toLocaleString()}</span>
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 p-4 rounded-[1.5rem] space-y-1 border border-slate-100">
-                                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase italic tracking-[0.2em]">
-                                    <span>Metode Bayar</span>
-                                    <span className="text-slate-900">{paymentMethod.toUpperCase()}</span>
-                                </div>
-                                {paymentMethod === 'cash' && (
-                                    <>
-                                        <div className="flex justify-between text-[10px] font-black text-slate-400 border-t border-slate-200 pt-2 mt-1">
-                                            <span>Tunai</span>
-                                            <span className="text-slate-900">Rp {customerMoney.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex justify-between text-[10px] font-black border-t border-slate-200 pt-2 mt-1 font-[900] tracking-widest uppercase italic leading-none">
-                                            <span className="text-green-600">Kembali</span>
-                                            <span className="text-green-600 text-sm font-sans tracking-normal">
-                                                Rp {change.toLocaleString()}
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <div className="text-center pt-4 italic text-slate-300 text-[10px] font-bold uppercase tracking-widest">
-                                *** Terima Kasih ***
-                            </div>
                         </div>
-                        <div className="bg-slate-50 p-6 flex gap-3 border-t border-slate-100 no-print">
-                            <button
-                                onClick={resetTransaction}
-                                className="flex-1 bg-white border border-slate-200 py-4 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:text-red-500 hover:border-red-100 transition-all tracking-widest active:scale-95"
-                            >
-                                <FiX size={14} className="inline mr-1" /> Tutup
-                            </button>
-                            <button
-                                onClick={() => window.print()}
-                                className="flex-1 bg-black text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-2xl hover:bg-slate-800 transition-all flex items-center justify-center gap-2 tracking-widest active:scale-95 shadow-black/20"
-                            >
-                                <FiPrinter size={14} /> Cetak Struk
-                            </button>
+
+                        {/* Modal Footer: Totals */}
+                        <div className="bg-white px-6 py-6 border-t border-gray-100 space-y-3 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.05)] z-10 pb-8 md:pb-6">
+                            <div className="flex justify-between text-sm text-gray-500">
+                                <span>Subtotal</span>
+                                <span className="font-bold text-gray-700">{formatRupiah(selectedTrx.total)}</span>
+                            </div>
+                            {Number(selectedTrx.diskon_nominal) > 0 && (
+                                <div className="flex justify-between text-sm text-red-500">
+                                    <span className="flex items-center gap-1">Diskon <span className="text-[10px] bg-red-100 px-1.5 rounded font-bold">HEMAT</span></span>
+                                    <span className="font-bold">- {formatRupiah(selectedTrx.diskon_nominal)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-200">
+                                <span className="text-sm font-bold text-gray-900 uppercase tracking-widest">Grand Total</span>
+                                <span className="text-2xl font-black text-gray-900">{formatRupiah(selectedTrx.grand_total)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

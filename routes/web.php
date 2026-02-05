@@ -33,6 +33,7 @@ Route::middleware('auth')->group(function () {
     
     // Transaksi Routes
     Route::resource('transaksi', TransaksiController::class);
+    Route::get('/Laporan', [TransaksiController::class, 'index'])->name('transaksi.laporan');
     Route::get('/transaksi/export', [TransaksiController::class, 'export'])->name('transaksi.export');
 });
 
