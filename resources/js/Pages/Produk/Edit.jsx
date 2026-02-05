@@ -2,14 +2,30 @@ import GeneralLayout from '@/Layouts/GeneralLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import Swal from 'sweetalert2';
+import CreatableSelect from 'react-select/creatable';
+import Select from 'react-select';
 import {
     ArrowLeftIcon, PhotoIcon, CloudArrowUpIcon,
     PlusIcon, TrashIcon, AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline';
 
-export default function ProdukEdit({ produk }) {
+export default function ProdukEdit({ produk, kategoris }) {
     const isVariantInitial = produk.is_variant === 1 || produk.is_variant === true;
     const defaultVariant = !isVariantInitial ? produk.varian[0] : {};
+
+    // 1. Opsi Kategori (Database)
+    const categoryOptions = kategoris.map(k => ({
+        value: k.id,
+        label: k.nama_kategori
+    }));
+
+    // 2. Opsi Satuan (Hardcode / Static)
+    const satuanOptions = [
+        { value: 'pcs', label: 'Pcs' },
+        { value: 'unit', label: 'Unit' },
+        { value: 'set', label: 'Set' },
+        { value: 'box', label: 'Box' },
+    ];
 
     // Helper: Format Ribuan
     const formatInputPrice = (value) => {
@@ -20,7 +36,7 @@ export default function ProdukEdit({ produk }) {
     const { data, setData, post, processing } = useForm({
         _method: 'PUT',
         nama_produk: produk.nama_produk || '',
-        kategori: produk.kategori || '',
+        kategori_id: produk.kategori_id || '',
         satuan: produk.satuan || 'pcs',
         deskripsi: produk.deskripsi || '',
         gambar: null,
@@ -44,6 +60,66 @@ export default function ProdukEdit({ produk }) {
     const [imagePreview, setImagePreview] = useState(
         produk.gambar_utama ? `/storage/${produk.gambar_utama}` : null
     );
+
+    // --- CUSTOM STYLES (Updated: Animasi Chevron) ---
+    const customSelectStyles = {
+        control: (base, state) => ({
+            ...base,
+            borderRadius: '0.75rem',
+            borderColor: state.isFocused ? '#6366f1' : '#e5e7eb',
+            paddingTop: '0.15rem',
+            paddingBottom: '0.15rem',
+            boxShadow: state.isFocused ? '0 0 0 1px #6366f1' : null,
+            '&:hover': { borderColor: '#d1d5db' }
+        }),
+        menu: (base) => ({
+            ...base,
+            borderRadius: '0.75rem',
+            zIndex: 9999,
+            overflow: 'hidden',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+        }),
+        input: (base) => ({
+            ...base,
+            'input:focus': { boxShadow: 'none !important', outline: 'none !important' },
+            boxShadow: 'none !important',
+        }),
+        // ANIMASI CHEVRON (Icon Panah)
+        dropdownIndicator: (base, state) => ({
+            ...base,
+            transition: 'all .2s ease', // Animasi halus
+            transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : null // Putar 180 derajat saat terbuka
+        }),
+        option: (base, state) => {
+            if (state.data.__isNew__) {
+                return {
+                    ...base,
+                    borderTop: '1px solid #f3f4f6',
+                    color: '#4f46e5',
+                    backgroundColor: state.isFocused ? '#eef2ff' : 'transparent',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    paddingTop: '12px',
+                    paddingBottom: '12px',
+                    '&::before': { content: '"\\002B"', marginRight: '8px', fontSize: '1.3em', fontWeight: '400' },
+                    ':active': { backgroundColor: '#e0e7ff' }
+                };
+            }
+            return {
+                ...base,
+                backgroundColor: state.isFocused ? '#f9fafb' : 'white',
+                color: state.isSelected ? '#111827' : '#374151',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                paddingTop: '10px',
+                paddingBottom: '10px',
+                ':active': { backgroundColor: '#f3f4f6' }
+            };
+        },
+        menuList: (base) => ({ ...base, paddingTop: 0, paddingBottom: 0 })
+    };
 
     const toggleVariantMode = (e) => setData('is_variant', e.target.checked);
 
@@ -78,6 +154,14 @@ export default function ProdukEdit({ produk }) {
             value = value.replace(/\D/g, '');
         }
         setData(field, value);
+    };
+
+    const handleCategoryChange = (newValue) => {
+        setData('kategori_id', newValue ? newValue.value : '');
+    };
+
+    const handleSatuanChange = (newValue) => {
+        setData('satuan', newValue ? newValue.value : 'pcs');
     };
 
     const handleVariantImageChange = (e, index) => {
@@ -178,16 +262,39 @@ export default function ProdukEdit({ produk }) {
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Nama Produk</label>
                                     <input type="text" value={data.nama_produk} onChange={e => setData('nama_produk', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white transition-colors" placeholder="Contoh: iPhone 15 Pro" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
+
+                                {/* ==================================================================== */}
+                                {/* LAYOUT GRID-COLS-3 (Kategori 2 Bagian, Satuan 1 Bagian) */}
+                                {/* ==================================================================== */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                                    {/* Kategori (Lebar: sm:col-span-2) */}
+                                    <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Kategori</label>
-                                        <input type="text" value={data.kategori} onChange={e => setData('kategori', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white" />
+                                        <CreatableSelect
+                                            isClearable
+                                            options={categoryOptions}
+                                            value={categoryOptions.find(option => option.value === data.kategori_id)}
+                                            onChange={handleCategoryChange}
+                                            styles={customSelectStyles}
+                                            placeholder="Pilih / Ketik..."
+                                            formatCreateLabel={(inputValue) => `Tambah Kategori Baru: "${inputValue}"`}
+                                            className="text-sm"
+                                        />
                                     </div>
-                                    <div>
+
+                                    {/* Satuan (Kecil: sm:col-span-1) - Pake React Select */}
+                                    <div className="sm:col-span-1">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Satuan</label>
-                                        <select value={data.satuan} onChange={e => setData('satuan', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-indigo-500 focus:bg-white">
-                                            <option value="pcs">Pcs</option><option value="unit">Unit</option><option value="set">Set</option><option value="box">Box</option>
-                                        </select>
+                                        <Select
+                                            options={satuanOptions}
+                                            value={satuanOptions.find(option => option.value === data.satuan)}
+                                            onChange={handleSatuanChange}
+                                            styles={customSelectStyles}
+                                            placeholder="Pilih"
+                                            isSearchable={false}
+                                            className="text-sm"
+                                        />
                                     </div>
                                 </div>
 

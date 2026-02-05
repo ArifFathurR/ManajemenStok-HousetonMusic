@@ -11,20 +11,23 @@ export default function ProductDetail({ produk }) {
     // Ambil URL dari Inertia agar Reaktif
     const { url } = usePage();
 
+    // Pastikan variants selalu array
+    const variants = produk.varians || [];
+
     // 1. State Varian
     const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
-    // 2. State Gambar Preview
+    // 2. State Gambar Preview (Default ke gambar parent)
     const [previewImage, setPreviewImage] = useState(produk.image_url);
 
-    // 3. EFFECT: Mendeteksi URL Parameter (variant_id) setiap kali halaman dimuat/berubah
+    // 3. EFFECT: Mendeteksi URL Parameter (variant_id)
     useEffect(() => {
         const queryParams = new URLSearchParams(window.location.search);
         const variantIdFromUrl = queryParams.get("variant_id");
 
-        if (variantIdFromUrl && produk.varians.length > 0) {
+        if (variantIdFromUrl && variants.length > 0) {
             // Cari index varian yang cocok dengan ID di URL
-            const foundIndex = produk.varians.findIndex(
+            const foundIndex = variants.findIndex(
                 (v) => v.id == variantIdFromUrl
             );
 
@@ -33,17 +36,25 @@ export default function ProductDetail({ produk }) {
                 setSelectedVariantIndex(foundIndex);
 
                 // PENTING: Set Gambar Preview sesuai varian tersebut
-                const variantImg = produk.varians[foundIndex].gambar_url || produk.image_url;
+                // Jika varian tidak punya gambar, fallback ke gambar parent (produk.image_url)
+                const variantImg = variants[foundIndex].gambar_url || produk.image_url;
                 setPreviewImage(variantImg);
             }
         } else {
-            // Jika tidak ada parameter variant_id, reset ke default
-            setSelectedVariantIndex(0);
-            setPreviewImage(produk.image_url);
+            // Jika tidak ada parameter, reset ke default (Index 0)
+            // Cek apakah index 0 punya gambar, jika tidak pakai parent
+            if (variants.length > 0) {
+                 // Reset ke variant pertama, tapi gambar tetap mengikuti logic fallback
+                 const defaultImg = variants[0].gambar_url || produk.image_url;
+                 setPreviewImage(defaultImg);
+                 setSelectedVariantIndex(0);
+            } else {
+                 setPreviewImage(produk.image_url);
+            }
         }
-    }, [url, produk]);
+    }, [url, produk]); // Dependency updated
 
-    const variants = produk.varians || [];
+    // Helper: Ambil variant aktif dengan aman
     const activeVariant = variants[selectedVariantIndex] || {};
 
     const formatRupiah = (number) => {
@@ -63,6 +74,7 @@ export default function ProductDetail({ produk }) {
     // Handler: Klik Thumbnail VARIAN
     const handleVariantClick = (index) => {
         setSelectedVariantIndex(index);
+        // Logic Fallback: Jika varian tidak punya gambar, pakai gambar parent
         const variantImg = variants[index].gambar_url || produk.image_url;
         setPreviewImage(variantImg);
     };
@@ -98,9 +110,12 @@ export default function ProductDetail({ produk }) {
                         <PencilSquareIcon className="w-4 h-4 mr-1.5 sm:mr-2" />
                         <span>Edit</span>
                     </Link>
-                    <button className="inline-flex items-center justify-center py-2.5 px-3 sm:px-6 bg-gray-900 rounded-xl text-xs sm:text-sm font-medium text-white hover:bg-gray-800 transition shadow-lg shadow-gray-200">
-                        Tambah Stok
-                    </button>
+                    <Link
+                        href={route("produk.create")}
+                        className="inline-flex items-center justify-center py-2.5 px-3 sm:px-6 bg-gray-900 rounded-xl text-xs sm:text-sm font-medium text-white hover:bg-gray-800 transition shadow-lg shadow-gray-200"
+                    >
+                        <span>Tambah Stok</span>
+                    </Link>
                 </div>
             </div>
 
@@ -114,7 +129,7 @@ export default function ProductDetail({ produk }) {
                         <p className="text-xs sm:text-sm text-gray-500 mb-5 sm:mb-6">
                             {previewImage === produk.image_url
                                 ? "Foto utama produk."
-                                : `Varian: ${activeVariant.nama_varian}`}
+                                : `Varian: ${activeVariant.nama_varian || 'Terpilih'}`}
                         </p>
 
                         {/* PREVIEW GAMBAR BESAR */}
@@ -176,12 +191,15 @@ export default function ProductDetail({ produk }) {
                                 {/* 2. THUMBNAIL VARIAN */}
                                 {variants.map((variant, index) => {
                                     const thumbImage = variant.gambar_url;
-                                    const isSelected = selectedVariantIndex === index && previewImage !== produk.image_url;
+                                    // Cek selected berdasarkan index agar lebih akurat saat varian gambar null
+                                    const isSelected = selectedVariantIndex === index;
 
                                     return (
                                         <button
                                             key={variant.id}
-                                            onClick={() => handleVariantClick(index)}
+                                            onClick={() =>
+                                                handleVariantClick(index)
+                                            }
                                             className={`aspect-square rounded-xl overflow-hidden border transition-all p-1 bg-gray-50 relative ${
                                                 isSelected
                                                     ? "border-indigo-600 ring-1 ring-indigo-600 bg-white"
@@ -192,7 +210,9 @@ export default function ProductDetail({ produk }) {
                                             {/* Warning Stok 0 */}
                                             {variant.stok === 0 && (
                                                 <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10">
-                                                    <span className="text-sm font-bold drop-shadow-sm">⚠️</span>
+                                                    <span className="text-sm font-bold drop-shadow-sm">
+                                                        ⚠️
+                                                    </span>
                                                 </div>
                                             )}
 
@@ -205,7 +225,9 @@ export default function ProductDetail({ produk }) {
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100">
                                                     <span className="text-[10px] font-bold">
-                                                        {variant.nama_varian.substring(0, 2).toUpperCase()}
+                                                        {variant.nama_varian
+                                                            .substring(0, 2)
+                                                            .toUpperCase()}
                                                     </span>
                                                 </div>
                                             )}
@@ -276,7 +298,9 @@ export default function ProductDetail({ produk }) {
                                             Harga Online
                                         </span>
                                         <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm font-medium shadow-sm">
-                                            {formatRupiah(activeVariant.harga_online)}
+                                            {formatRupiah(
+                                                activeVariant.harga_online
+                                            )}
                                         </div>
                                     </div>
                                     <div className="space-y-1">
@@ -284,7 +308,9 @@ export default function ProductDetail({ produk }) {
                                             Harga Offline
                                         </span>
                                         <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm font-medium shadow-sm">
-                                            {formatRupiah(activeVariant.harga_offline)}
+                                            {formatRupiah(
+                                                activeVariant.harga_offline
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -297,12 +323,18 @@ export default function ProductDetail({ produk }) {
                                 </label>
                                 <div className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm flex items-center justify-between shadow-sm">
                                     <span className="flex items-center gap-2.5">
-                                        <span className={`w-2.5 h-2.5 rounded-full ${activeVariant.stok > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" : "bg-red-500"}`}></span>
+                                        <span
+                                            className={`w-2.5 h-2.5 rounded-full ${activeVariant.stok > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" : "bg-red-500"}`}
+                                        ></span>
                                         <span className="font-medium">
-                                            {activeVariant.stok} {produk.satuan}
+                                            {activeVariant.stok || 0} {produk.satuan}
                                         </span>
-                                        <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md ${activeVariant.stok > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                                            {activeVariant.stok > 0 ? "Tersedia" : "Stok Habis"}
+                                        <span
+                                            className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md ${activeVariant.stok > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}
+                                        >
+                                            {activeVariant.stok > 0
+                                                ? "Tersedia"
+                                                : "Stok Habis"}
                                         </span>
                                     </span>
                                 </div>

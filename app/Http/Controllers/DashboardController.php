@@ -30,7 +30,7 @@ class DashboardController extends Controller
 
         // 2. HITUNG PRODUK BARU
         $totalProduk = Produk::where('toko_id', $tokoId)->count();
-        // Ini variabel yang hilang sebelumnya:
+
         $produkBaruBulanIni = Produk::where('toko_id', $tokoId)
             ->whereMonth('created_at', $now->month)->whereYear('created_at', $now->year)->count();
 
@@ -43,7 +43,12 @@ class DashboardController extends Controller
 
         $persenTerjual = $this->hitungPersentase($terjualBulanIni, $terjualBulanLalu);
 
-        $totalKategori = Produk::where('toko_id', $tokoId)->distinct('kategori')->count('kategori');
+        // --- PERBAIKAN DI SINI (Total Kategori) ---
+        // Menghitung jumlah kategori unik berdasarkan kategori_id yang dipakai produk
+        $totalKategori = Produk::where('toko_id', $tokoId)
+            ->whereNotNull('kategori_id') // Pastikan tidak null
+            ->distinct('kategori_id')     // Ambil ID unik
+            ->count('kategori_id');       // Hitung jumlahnya
 
         // 4. GRAFIK TREN
         $chartData = Transaksi::where('toko_id', $tokoId)
@@ -67,12 +72,14 @@ class DashboardController extends Controller
             ->groupBy('produk_id')
             ->orderByDesc('total_sold')
             ->limit(5)
-            ->with('produk')
+            ->with(['produk.kategoriRelasi']) // Load relasi Kategori
             ->get()
             ->map(function ($item) {
                 return [
                     'id' => $item->produk->id,
                     'name' => $item->produk->nama_produk,
+                    // Ambil nama kategori dari relasi
+                    'category' => $item->produk->kategoriRelasi ? $item->produk->kategoriRelasi->nama_kategori : 'Umum',
                     'sold' => $item->total_sold,
                     'image' => $item->produk->gambar_utama ? '/storage/' . $item->produk->gambar_utama : null
                 ];
@@ -107,14 +114,13 @@ class DashboardController extends Controller
             ->toArray();
 
         return Inertia::render('Dashboard', [
-            // PASTIKAN SEMUA KEY INI ADA
             'stats' => [
                 'pendapatan' => (float) $pendapatanBulanIni,
-                'persen_pendapatan' => $persenPendapatan, // Digunakan frontend untuk % Pendapatan
+                'persen_pendapatan' => $persenPendapatan,
                 'total_produk' => $totalProduk,
-                'produk_baru' => $produkBaruBulanIni,     // Digunakan frontend untuk +Baru
+                'produk_baru' => $produkBaruBulanIni,
                 'terjual' => (int) $terjualBulanIni,
-                'persen_terjual' => $persenTerjual,       // Digunakan frontend untuk % Terjual
+                'persen_terjual' => $persenTerjual,
                 'total_kategori' => $totalKategori,
             ],
             'chart_data' => $chartData,
