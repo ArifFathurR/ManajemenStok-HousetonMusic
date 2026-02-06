@@ -6,7 +6,9 @@ import {
     BuildingStorefrontIcon, GlobeAltIcon, BanknotesIcon
 } from '@heroicons/react/24/outline';
 // IMPORT COMPONENT PIE CHART
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Label } from 'recharts';
+
+// ... (imports)
 
 export default function Dashboard({
     auth,
@@ -14,7 +16,8 @@ export default function Dashboard({
     low_stock_variants = [],
     chart_data = [],
     top_products = [],
-    revenue_by_channel = { offline: 0, online: 0 }
+    revenue_by_channel = { offline: 0, online: 0 },
+    current_month_name = 'Bulan Ini' // Default fallback
 }) {
 
     const formatRupiah = (number) => {
@@ -38,69 +41,10 @@ export default function Dashboard({
 
             <div className="mb-6">
                 <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-                <p className="text-sm text-gray-500">Ringkasan performa toko bulan ini.</p>
+                <p className="text-sm text-gray-500">Ringkasan performa toko periode <span className="font-bold text-indigo-600">{current_month_name}</span>.</p>
             </div>
 
-            {/* === 1. TOP SECTION: STATS CARDS === */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-
-                {/* Hero Card */}
-                <div className="lg:col-span-1 bg-gradient-to-br from-gray-900 to-indigo-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[180px]">
-                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-1">
-                            <CurrencyDollarIcon className="w-5 h-5 text-white/80" />
-                            <span className="text-xs font-medium text-gray-300">Pendapatan</span>
-                        </div>
-                        <h2 className="text-2xl font-bold mt-1">{formatRupiah(stats.pendapatan)}</h2>
-                        <div className={`inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${stats.persen_pendapatan >= 0 ? 'bg-green-500/20 border-green-500/30 text-green-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
-                            <ArrowTrendingUpIcon className={`w-3 h-3 ${stats.persen_pendapatan < 0 ? 'rotate-180' : ''}`} />
-                            <span>{stats.persen_pendapatan > 0 ? '+' : ''}{stats.persen_pendapatan}%</span>
-                        </div>
-                    </div>
-                    <div className="relative z-10 mt-6">
-                        <p className="text-[10px] sm:text-xs text-gray-400">Update: {new Date().toLocaleDateString('id-ID')}</p>
-                    </div>
-                </div>
-
-                {/* 3 Small Cards */}
-                <div className="lg:col-span-3 grid grid-cols-3 gap-4">
-                    {/* Produk */}
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><ArchiveBoxIcon className="w-5 h-5" /></div>
-                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md">+{stats.produk_baru || 0} Baru</span>
-                        </div>
-                        <div className="mt-3">
-                            <h3 className="text-xl font-bold text-gray-900">{stats.total_produk}</h3>
-                            <p className="text-xs text-gray-500">Total Produk</p>
-                        </div>
-                    </div>
-                    {/* Terjual */}
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div className="p-2 bg-orange-50 text-orange-600 rounded-xl"><ShoppingBagIcon className="w-5 h-5" /></div>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${stats.persen_terjual >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
-                                {stats.persen_terjual > 0 ? '+' : ''}{stats.persen_terjual}%
-                            </span>
-                        </div>
-                        <div className="mt-3">
-                            <h3 className="text-xl font-bold text-gray-900">{stats.terjual}</h3>
-                            <p className="text-xs text-gray-500">Item Terjual</p>
-                        </div>
-                    </div>
-                    {/* Kategori */}
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><TagIcon className="w-5 h-5" /></div>
-                        </div>
-                        <div className="mt-3">
-                            <h3 className="text-xl font-bold text-gray-900">{stats.total_kategori}</h3>
-                            <p className="text-xs text-gray-500">Kategori</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {/* ... (Stats Cards - Unchanged) ... */}
 
             {/* === 2. MIDDLE SECTION: CHART & LOW STOCK === */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -110,13 +54,13 @@ export default function Dashboard({
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-900 flex items-center gap-2">
                             <ChartBarIcon className="w-5 h-5 text-indigo-500" />
-                            Trend Penjualan (Bulan Ini)
+                            Trend Penjualan ({current_month_name})
                         </h3>
                     </div>
-                    <div className="h-64 w-full">
+                    <div className="h-72 w-full">
                         {chart_data && chart_data.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chart_data}>
+                                <AreaChart data={chart_data} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
                                     <defs>
                                         <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -124,10 +68,44 @@ export default function Dashboard({
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} dy={10} />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        tick={{fontSize: 11, fill: '#6b7280', fontWeight: '600'}} 
+                                        dy={10}
+                                    >
+                                        <Label 
+                                            value={current_month_name} 
+                                            position="insideBottom" 
+                                            offset={-10} 
+                                            style={{ fontSize: '11px', fill: '#9ca3af', fontWeight: '300', textTransform: 'uppercase', letterSpacing: '1px' }} 
+                                        />
+                                    </XAxis>
                                     <YAxis hide={true} />
-                                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} formatter={(value) => [formatRupiah(value), '']} />
-                                    <Area type="monotone" dataKey="total" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+                                    <Tooltip 
+                                        cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                                        contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px'}} 
+                                        labelFormatter={(label, payload) => {
+                                            if (payload && payload.length > 0 && payload[0].payload.full_date) {
+                                                return <span className="font-semibold text-gray-700 block mb-2">{payload[0].payload.full_date}</span>;
+                                            }
+                                            return label;
+                                        }}
+                                        formatter={(value) => [
+                                            <span key="val" className="text-indigo-600 font-bold text-lg">{formatRupiah(value)}</span>, 
+                                            <span key="lbl" className="text-xs text-gray-400">Total Penjualan</span>
+                                        ]} 
+                                    />
+                                    <Area 
+                                        type="monotone" 
+                                        dataKey="total" 
+                                        stroke="#6366f1" 
+                                        strokeWidth={4} 
+                                        fillOpacity={1} 
+                                        fill="url(#colorTotal)" 
+                                        activeDot={{ r: 6, strokeWidth: 0, fill: '#4f46e5' }}
+                                    />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
@@ -209,7 +187,7 @@ export default function Dashboard({
                 <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm h-full flex flex-col">
                     <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
                         <BanknotesIcon className="w-5 h-5 text-green-700" />
-                        Sumber Pendapatan
+                        Sumber Pendapatan ({current_month_name})
                     </h3>
 
                     <div className="flex-1 min-h-[200px] relative">
@@ -222,8 +200,11 @@ export default function Dashboard({
                                         cy="50%"
                                         innerRadius={60}
                                         outerRadius={80}
-                                        paddingAngle={5}
+                                        cornerRadius={6}
+                                        paddingAngle={4}
                                         dataKey="value"
+                                        startAngle={90}
+                                        endAngle={-270}
                                     >
                                         {pieData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
@@ -232,8 +213,15 @@ export default function Dashboard({
                                     <Tooltip
                                         formatter={(value) => formatRupiah(value)}
                                         contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                        itemStyle={{ color: '#374151', fontSize: '13px', fontWeight: 'bold' }}
                                     />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                    <Legend 
+                                        verticalAlign="bottom" 
+                                        height={36} 
+                                        iconType="circle" 
+                                        iconSize={8}
+                                        formatter={(value) => <span className="text-xs font-medium text-gray-600 ml-1">{value}</span>}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (

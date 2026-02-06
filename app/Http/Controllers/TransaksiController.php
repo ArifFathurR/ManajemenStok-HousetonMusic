@@ -162,7 +162,10 @@ class TransaksiController extends Controller
                     throw new \Exception("Stok '{$varian->produk->nama_produk}' kurang. Sisa: {$varian->stok}");
                 }
 
-                $harga = $request->channel === 'online' ? $varian->harga_online : $varian->harga_offline;
+                // Cek flag bonus
+                $isBonus = $item['is_bonus'] ?? false;
+                $harga = $isBonus ? 0 : ($request->channel === 'online' ? $varian->harga_online : $varian->harga_offline);
+                
                 $subtotalHitung = $harga * $item['qty'];
                 $total += $subtotalHitung;
 

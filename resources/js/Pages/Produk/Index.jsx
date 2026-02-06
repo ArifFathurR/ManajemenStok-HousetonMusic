@@ -1,13 +1,14 @@
 import GeneralLayout from '@/Layouts/GeneralLayout';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
+import Select from 'react-select'; 
 import Swal from 'sweetalert2';
 import {
     PlusIcon, MagnifyingGlassIcon, PhotoIcon, ArrowsUpDownIcon,
     EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, ArchiveBoxIcon
 } from '@heroicons/react/24/outline';
 
-export default function ProdukIndex({ produk }) {
+export default function ProdukIndex({ produk, kategoris }) {
     const { flash } = usePage().props;
 
     // --- 1. Notification Handling ---
@@ -32,6 +33,7 @@ export default function ProdukIndex({ produk }) {
     const [localProduk, setLocalProduk] = useState(produk);
     const [sortOrder, setSortOrder] = useState('asc'); // 'asc' = Terendah, 'desc' = Terbanyak
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState(null); // State Kategori
     const [openMenuId, setOpenMenuId] = useState(null);
 
     // --- 3. Filtering & Sorting Logic ---
@@ -51,13 +53,18 @@ export default function ProdukIndex({ produk }) {
             );
         }
 
+        // Filter Kategori
+        if (selectedCategory) {
+            filtered = filtered.filter(item => item.kategori === selectedCategory.label);
+        }
+
         // Sorting Stok (Client Side)
         filtered.sort((a, b) => {
             return sortOrder === 'asc' ? a.stok - b.stok : b.stok - a.stok;
         });
 
         setLocalProduk(filtered);
-    }, [sortOrder, searchQuery, produk]);
+    }, [sortOrder, searchQuery, selectedCategory, produk]);
 
     // --- 4. Handlers ---
     const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -118,11 +125,11 @@ export default function ProdukIndex({ produk }) {
                     </p>
                 </div>
 
-                {/* Container Satu Baris: Flex Row, Gap kecil */}
-                <div className="flex w-full md:w-auto gap-2">
+                {/* Container Filter & Actions */}
+                <div className="flex flex-col gap-3 w-full md:w-auto md:flex-row md:items-center">
 
-                    {/* 1. Search Bar (Flexible Width) */}
-                    <div className="relative group flex-1 min-w-0">
+                    {/* 1. Search Bar (Mobile: Row 1, Desktop: Flexible) */}
+                    <div className="relative group w-full md:flex-1 md:min-w-[200px]">
                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                             <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
                         </div>
@@ -135,32 +142,75 @@ export default function ProdukIndex({ produk }) {
                         />
                     </div>
 
-                    {/* 2. Tombol Filter Stok (Fixed Width) */}
-                    {/* Menggunakan shrink-0 agar tidak tergencet */}
-                    <button
-                        onClick={toggleSort}
-                        className={`shrink-0 inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border rounded-xl text-sm font-medium transition-all shadow-sm ${
-                            sortOrder === 'asc'
-                            ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' // Style Stok Sedikit
-                            : 'bg-indigo-50 border-indigo-200 text-indigo-700' // Style Stok Banyak (Aktif)
-                        }`}
-                        title={sortOrder === 'asc' ? "Klik untuk urutkan stok terbanyak" : "Klik untuk urutkan stok terendah"}
-                    >
-                        <ArrowsUpDownIcon className="w-5 h-5 sm:mr-2" />
-                        {/* Teks hanya muncul di Tablet/Desktop (sm ke atas) */}
-                        <span className="hidden sm:inline">
-                            {sortOrder === 'asc' ? 'Stok (Rendah)' : 'Stok (Banyak)'}
-                        </span>
-                    </button>
+                    {/* Group 2: Filter + Actions (Mobile: Row 2, Desktop: Row 1 continued) */}
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        
+                        {/* 2. Filter Kategori (Flexible Width on Mobile) */}
+                        <div className="flex-1 md:w-48 lg:w-56 min-w-[140px] z-30">
+                            <Select
+                                options={kategoris.map(k => ({ value: k.id, label: k.nama_kategori }))}
+                                value={selectedCategory}
+                                onChange={setSelectedCategory}
+                                isClearable
+                                placeholder="Kategori..."
+                                className="text-sm"
+                                styles={{
+                                    control: (base, state) => ({
+                                        ...base,
+                                        borderRadius: '0.75rem',
+                                        borderColor: state.isFocused ? '#6366f1' : '#e5e7eb', // Border indigo saat focus, gray saat idle
+                                        paddingTop: '2px',
+                                        paddingBottom: '2px',
+                                        boxShadow: 'none', // HILANGKAN BLUE BOX DEFAULT
+                                        '&:hover': {
+                                            borderColor: '#6366f1'
+                                        }
+                                    }),
+                                    menu: (base) => ({
+                                        ...base,
+                                        zIndex: 9999,
+                                        borderRadius: '0.75rem',
+                                        overflow: 'hidden'
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        backgroundColor: state.isSelected ? '#6366f1' : (state.isFocused ? '#e0e7ff' : 'white'),
+                                        color: state.isSelected ? 'white' : '#1f2937',
+                                    }),
+                                    input: (base) => ({
+                                        ...base,
+                                        boxShadow: 'none !important',
+                                        outline: 'none !important',
+                                    })
+                                }}
+                            />
+                        </div>
 
-                    {/* 3. Tombol Tambah (Fixed Width) */}
-                    <Link
-                        href={route('produk.create')}
-                        className="shrink-0 inline-flex items-center justify-center px-3 sm:px-5 py-2.5 bg-gray-900 border border-transparent rounded-xl text-sm font-semibold text-white hover:bg-gray-800 focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 transition-all shadow-lg shadow-gray-200"
-                    >
-                        <PlusIcon className="w-5 h-5 sm:mr-2" />
-                        <span className="hidden sm:inline">Tambah</span>
-                    </Link>
+                        {/* 3. Tombol Filter Stok */}
+                        <button
+                            onClick={toggleSort}
+                            className={`shrink-0 inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border rounded-xl text-sm font-medium transition-all shadow-sm ${
+                                sortOrder === 'asc'
+                                ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                                : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                            }`}
+                            title={sortOrder === 'asc' ? "Klik untuk urutkan stok terbanyak" : "Klik untuk urutkan stok terendah"}
+                        >
+                            <ArrowsUpDownIcon className="w-5 h-5 sm:mr-2" />
+                            <span className="hidden sm:inline">
+                                {sortOrder === 'asc' ? 'Stok (Rendah)' : 'Stok (Banyak)'}
+                            </span>
+                        </button>
+
+                         {/* 4. Tombol Tambah */}
+                         <Link
+                            href={route('produk.create')}
+                            className="shrink-0 inline-flex items-center justify-center px-3 sm:px-5 py-2.5 bg-gray-900 border border-transparent rounded-xl text-sm font-semibold text-white hover:bg-gray-800 focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 transition-all shadow-lg shadow-gray-200"
+                        >
+                            <PlusIcon className="w-5 h-5 sm:mr-2" />
+                            <span className="hidden sm:inline">Tambah</span>
+                        </Link>
+                    </div>
                 </div>
             </div>
 

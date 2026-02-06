@@ -227,19 +227,27 @@ export default function Index({ transaksi, stats, filters, toko }) {
                             </div>
                             <div className="col-span-1 md:col-span-2 space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal & Aksi</label>
-                                <div className="flex gap-2 items-center">
-                                    <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
-                                    <span className="text-gray-300 font-bold">-</span>
-                                    <input type="date" value={filterValues.end_date} onChange={(e) => handleFilter('end_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    {/* Wrapper Input Tanggal + Reset */}
+                                    <div className="flex items-center gap-2 flex-1 w-full">
+                                        <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+                                        <span className="text-gray-300 font-bold">-</span>
+                                        <input type="date" value={filterValues.end_date} onChange={(e) => handleFilter('end_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+                                        
+                                        {/* Tombol Reset (Moved here) */}
+                                        <button onClick={resetFilter} className="shrink-0 p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200" title="Reset Filter">
+                                            <ArrowPathIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
 
-                                    {/* Tombol Reset */}
-                                    <button onClick={resetFilter} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200" title="Reset Filter"><ArrowPathIcon className="w-5 h-5" /></button>
-
-                                    {/* Tombol Export Excel */}
-                                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95" title="Export Excel">
-                                        <DocumentArrowDownIcon className="w-5 h-5" />
-                                        <span className="hidden md:inline">Export</span>
-                                    </button>
+                                    {/* Wrapper Tombol Export */}
+                                    <div className="flex gap-2 shrink-0">
+                                        {/* Tombol Export Excel */}
+                                        <button onClick={handleExport} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95" title="Export Excel">
+                                            <DocumentArrowDownIcon className="w-5 h-5" />
+                                            <span>Export</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
