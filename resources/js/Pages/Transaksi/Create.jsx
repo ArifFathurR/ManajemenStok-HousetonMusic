@@ -19,10 +19,9 @@ export default function Create({ auth, products, toko }) {
     const [channel, setChannel] = useState('offline');
     const [paymentMethod, setPaymentMethod] = useState('cash');
     
-    // State angka murni (untuk kalkulasi)
     const [discount, setDiscount] = useState(0);
     const [customerMoney, setCustomerMoney] = useState(0);
-
+    
     const [showReceipt, setShowReceipt] = useState(false);
     const [isCartExpanded, setIsCartExpanded] = useState(false);
     const [transactionCode, setTransactionCode] = useState("");
@@ -32,18 +31,14 @@ export default function Create({ auth, products, toko }) {
     const [showVariantModal, setShowVariantModal] = useState(false);
     const [imageErrors, setImageErrors] = useState({});
 
-    // --- HELPERS UNTUK FORMAT TITIK ---
-    
-    // Mengubah angka ke format titik (1000 -> 1.000)
-    const formatNumberWithDots = (val) => {
-        if (val === 0 || !val) return '';
-        return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    // --- HELPER FORMATTING ---
+    const formatDisplay = (value) => {
+        if (!value) return '';
+        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     };
 
-    // Mengubah input teks dengan titik kembali ke angka murni
-    const handleNumberInput = (setter) => (e) => {
-        const rawValue = e.target.value.replace(/\D/g, ''); // Hapus semua karakter non-angka
-        setter(Number(rawValue));
+    const parseRaw = (displayValue) => {
+        return Number(displayValue.replace(/\./g, '')) || 0;
     };
 
     const formatRupiah = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
@@ -69,7 +64,10 @@ export default function Create({ auth, products, toko }) {
         if (product.variants && product.variants.length > 0) {
             setSelectedProduct(product); setShowVariantModal(true);
         } else {
-            if (product.stok <= 0) { showAlert('Stok produk habis', 'error'); return; }
+            if (product.stok <= 0) { 
+                showAlert('Stok produk habis', 'error'); 
+                return; 
+            }
             addToCart(product, null);
         }
     };
@@ -127,11 +125,12 @@ export default function Create({ auth, products, toko }) {
     const handleFinalize = async () => {
         if (cart.length === 0) return showAlert('Keranjang kosong', 'error');
         setIsProcessing(true);
-
         const payload = {
             cart: cart.map(i => ({ id: i.id, variantId: i.variantId || null, qty: parseInt(i.qty) })),
-            channel, paymentMethod, discount,
-            customerMoney: parseFloat(paymentMethod === 'cash' ? customerMoney : grandTotal)
+            channel: channel,
+            paymentMethod: paymentMethod,
+            discount: parseFloat(discount) || 0,
+            customerMoney: parseFloat(paymentMethod === 'cash' ? customerMoney : grandTotal) || 0
         };
 
         try {
@@ -144,7 +143,8 @@ export default function Create({ auth, products, toko }) {
                 showAlert(response.data.message || 'Gagal', 'error');
             }
         } catch (error) {
-            showAlert(error.response?.data?.message || 'Terjadi kesalahan sistem', 'error');
+            console.error(error);
+            showAlert('Terjadi kesalahan sistem', 'error');
         } finally {
             setIsProcessing(false);
         }
@@ -154,7 +154,9 @@ export default function Create({ auth, products, toko }) {
         setCart([]); setDiscount(0); setCustomerMoney(0); setShowReceipt(false); setIsCartExpanded(false); setChannel('offline'); setPaymentMethod('cash');
     };
 
-    const handlePrint = () => window.print();
+    const handlePrint = () => {
+        window.print();
+    };
 
     return (
         <GeneralLayout>
@@ -164,9 +166,9 @@ export default function Create({ auth, products, toko }) {
                 #printable-receipt { display: none; }
                 @media print {
                     body * { visibility: hidden; height: 0; overflow: hidden; }
-                    body, html { margin: 0; padding: 0; background: white; overflow: visible !important; }
+                    body, html { margin: 0; padding: 0; height: 100%; width: 100%; background-color: white; overflow: visible !important; }
                     #printable-receipt, #printable-receipt * { visibility: visible; height: auto; overflow: visible; }
-                    #printable-receipt { display: block !important; position: absolute; left: 0; top: 0; width: 80mm; z-index: 99999; }
+                    #printable-receipt { display: block !important; position: absolute; left: 0; top: 0; width: 80mm; margin: 0; padding: 0; background-color: white; z-index: 99999; border: none; }
                     @page { size: 80mm auto; margin: 0; }
                     .no-print { display: none !important; }
                 }
@@ -174,7 +176,7 @@ export default function Create({ auth, products, toko }) {
             `}</style>
 
             {alertMessage && (
-                <div className={`fixed top-6 right-6 z-[100] animate-in slide-in-from-top duration-300 bg-black text-white border-l-4 ${alertMessage.type === 'error' ? 'border-red-500' : 'border-green-500'} px-4 py-3 rounded shadow-2xl flex items-center gap-3 no-print`}>
+                <div className={`fixed top-6 right-6 z-[100] animate-in slide-in-from-top duration-300 ${alertMessage.type === 'error' ? 'bg-black text-white border-l-4 border-red-500' : 'bg-black text-white border-l-4 border-green-500'} px-4 py-3 rounded shadow-2xl flex items-center gap-3 no-print`}>
                     {alertMessage.type === 'error' ? <ExclamationCircleIcon className="w-5 h-5 text-red-500"/> : <CheckCircleIcon className="w-5 h-5 text-green-500"/>}
                     <span className="text-sm font-bold">{alertMessage.message}</span>
                 </div>
@@ -246,6 +248,7 @@ export default function Create({ auth, products, toko }) {
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900">Keranjang</h3>
                                 <p className="text-[10px] text-gray-500 lg:hidden">Total: <span className="font-bold text-gray-900">{formatRupiah(grandTotal)}</span></p>
+                                <p className="text-[10px] text-gray-500 hidden lg:block">Review pesanan</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -290,13 +293,7 @@ export default function Create({ auth, products, toko }) {
                                 <span>Diskon</span>
                                 <div className="flex items-center w-32 bg-white border border-gray-200 rounded-md px-2 h-7 focus-within:border-black transition-colors">
                                     <span className="text-gray-400 mr-1">-</span>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border-none p-0 text-right text-xs font-bold text-red-500 focus:ring-0 placeholder-gray-300" 
-                                        placeholder="0" 
-                                        value={formatNumberWithDots(discount)} 
-                                        onChange={handleNumberInput(setDiscount)} 
-                                    />
+                                    <input type="text" className="w-full border-none p-0 text-right text-xs font-bold text-red-500 focus:ring-0 placeholder-gray-300" placeholder="0" value={formatDisplay(discount)} onChange={(e) => setDiscount(parseRaw(e.target.value))} />
                                 </div>
                             </div>
                             <div className="flex justify-between items-center pt-2 border-t border-gray-200">
@@ -308,14 +305,7 @@ export default function Create({ auth, products, toko }) {
                         <div className="space-y-3">
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">Rp</span>
-                                <input 
-                                    type="text" 
-                                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${paymentMethod === 'cash' ? 'bg-white border-gray-300 focus:ring-1 focus:ring-black text-gray-900' : 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'}`} 
-                                    placeholder="Uang diterima..." 
-                                    value={formatNumberWithDots(customerMoney)} 
-                                    onChange={handleNumberInput(setCustomerMoney)}
-                                    disabled={paymentMethod !== 'cash'} 
-                                />
+                                <input type="text" className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${paymentMethod === 'cash' ? 'bg-white border-gray-300 focus:ring-1 focus:ring-black text-gray-900' : 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'}`} placeholder="Uang diterima..." value={formatDisplay(customerMoney)} onChange={(e) => setCustomerMoney(parseRaw(e.target.value))} disabled={paymentMethod !== 'cash'} />
                             </div>
                             {paymentMethod === 'cash' && (
                                 <div className="flex gap-2 overflow-x-auto hide-scroll pb-1">
@@ -338,7 +328,7 @@ export default function Create({ auth, products, toko }) {
 
                         {paymentMethod === 'cash' && (<div className="flex justify-between items-center mt-3 text-xs"><span className="text-gray-500">Kembalian</span><span className={`font-bold ${change >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatRupiah(change)}</span></div>)}
 
-                        <button disabled={cart.length === 0 || (paymentMethod === 'cash' && customerMoney < grandTotal) || isProcessing} onClick={handleFinalize} className="w-full mt-4 py-3.5 bg-black text-white rounded-xl text-sm font-bold shadow-lg hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+                        <button disabled={cart.length === 0 || (paymentMethod === 'cash' && customerMoney < grandTotal) || isProcessing} onClick={handleFinalize} className="w-full mt-4 py-3.5 bg-black text-white rounded-xl text-sm font-bold shadow-lg shadow-gray-400/30 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
                             {isProcessing ? 'Memproses...' : <><PrinterIcon className="w-4 h-4" /> Proses & Cetak</>}
                         </button>
                     </div>
@@ -347,17 +337,28 @@ export default function Create({ auth, products, toko }) {
 
             {/* --- MODAL VARIAN --- */}
             {showVariantModal && selectedProduct && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 no-print">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 no-print">
                     <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl relative">
                         <button onClick={() => setShowVariantModal(false)} className="absolute top-4 right-4 p-1 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500"><XMarkIcon className="w-5 h-5"/></button>
                         <h3 className="font-bold text-lg text-gray-900 mb-1 pr-8">{selectedProduct.nama_produk}</h3>
                         <p className="text-xs text-gray-500 mb-4">Pilih varian:</p>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto hide-scroll">
                             {selectedProduct.variants.map(v => (
-                                <button key={v.id} onClick={() => addToCart(selectedProduct, v)} disabled={v.stok <= 0} className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-black transition-all group disabled:opacity-50 disabled:cursor-not-allowed bg-white">
+                                <button key={v.id} onClick={() => addToCart(selectedProduct, v)} disabled={v.stok <= 0} className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-black transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 bg-white">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
-                                            {v.gambar ? <img src={v.gambar.startsWith('http') ? v.gambar : `/storage/${v.gambar}`} className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-gray-400">{v.name.charAt(0)}</span>}
+                                            {/* Fix Variant Image Display */}
+                                            {v.gambar && !imageErrors[`variant-${v.id}`] ? (
+                                                <img 
+                                                    src={v.gambar.startsWith('http') ? v.gambar : `/storage/${v.gambar}`} 
+                                                    className="w-full h-full object-cover" 
+                                                    onError={() => setImageErrors(prev => ({ ...prev, [`variant-${v.id}`]: true }))}
+                                                />
+                                            ) : (
+                                                <div className="flex items-center justify-center w-full h-full bg-gray-50">
+                                                    <span className="text-xs font-bold text-gray-400">{v.name.charAt(0)}</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="text-left">
                                             <span className="block text-sm font-bold text-gray-800 group-hover:text-black">{v.name}</span>
@@ -385,13 +386,14 @@ export default function Create({ auth, products, toko }) {
                                 <h2 className="font-bold text-lg text-gray-900 uppercase leading-tight">{toko?.nama_toko || auth.user.name}</h2>
                                 {toko?.cabang && <p className="text-xs font-semibold text-gray-600 mt-0.5 uppercase">{toko.cabang}</p>}
                                 <div className="text-[10px] text-gray-500 mt-2 space-y-0.5">
-                                    <p>{toko?.alamat || 'Alamat Belum Diatur'}</p>
-                                    <p className="font-mono">No. Telp {toko?.no_hp || '-'}</p>
+                                    <p className="flex items-center justify-center gap-1 leading-tight">{toko?.alamat || 'Alamat Belum Diatur'}</p>
+                                    <p className="flex items-center justify-center gap-1 font-mono">No. Telp {toko?.no_hp || '-'}</p>
                                 </div>
                             </div>
                             <div className="border-t border-b border-dashed border-gray-300 py-3 mb-4 space-y-1 text-[10px] text-gray-600 font-mono">
-                                <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900">{transactionCode}</span></div>
-                                <div className="flex justify-between"><span>TANGGAL</span><span>{new Date().toLocaleDateString('id-ID')}</span></div>
+                                <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900 uppercase">{transactionCode}</span></div>
+                                <div className="flex justify-between"><span>TANGGAL</span><span>{new Date().toLocaleDateString('id-ID')} {new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span></div>
+                                <div className="flex justify-between"><span>KASIR</span><span className="uppercase">{auth.user.name}</span></div>
                                 <div className="flex justify-between"><span>METODE</span><span className="uppercase font-bold">{paymentMethod}</span></div>
                             </div>
                             <div className="space-y-3 mb-6">
@@ -408,13 +410,18 @@ export default function Create({ auth, products, toko }) {
                                 ))}
                             </div>
                             <div className="border-t border-gray-300 pt-3 space-y-1 text-xs font-mono">
-                                <div className="flex justify-between"><span>SUBTOTAL</span><span>{formatRupiah(subtotal)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>SUBTOTAL</span><span>{formatRupiah(subtotal)}</span></div>
                                 {discount > 0 && <div className="flex justify-between text-red-600"><span>DISKON</span><span>-{formatRupiah(discount)}</span></div>}
                                 <div className="flex justify-between font-bold text-sm text-gray-900 pt-2 border-t border-dashed border-gray-300 mt-2">
-                                    <span>TOTAL</span><span>{formatRupiah(grandTotal)}</span>
+                                    <span>TOTAL</span>
+                                    <span className="text-base">{formatRupiah(grandTotal)}</span>
                                 </div>
-                                <div className="flex justify-between"><span>BAYAR</span><span>{formatRupiah(customerMoney)}</span></div>
-                                <div className="flex justify-between font-bold"><span>KEMBALI</span><span>{formatRupiah(change)}</span></div>
+                                <div className="flex justify-between text-gray-600 pt-1"><span>BAYAR</span><span>{formatRupiah(customerMoney)}</span></div>
+                                <div className="flex justify-between text-gray-900 font-bold"><span>KEMBALI</span><span>{formatRupiah(change)}</span></div>
+                            </div>
+                            <div className="text-center mt-8 space-y-1">
+                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">*** TERIMA KASIH ***</p>
+                                <p className="text-[8px] text-gray-400">Barang yang dibeli tidak dapat ditukar</p>
                             </div>
                         </div>
                         <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3">
@@ -430,29 +437,47 @@ export default function Create({ auth, products, toko }) {
                 <div id="printable-receipt">
                     <div className="p-2">
                         <div className="text-center mb-6">
-                            <img src="/images/logo-houston.png" alt="Logo" className="h-16 mx-auto mb-3" />
-                            <h2 className="font-bold text-lg uppercase">{toko?.nama_toko || auth.user.name}</h2>
-                            <p className="text-[10px]">{toko?.alamat}</p>
-                        </div>
-                        <div className="border-t border-b border-dashed py-2 mb-4 text-[10px] font-mono">
-                            <div className="flex justify-between"><span>TRX:</span><span>{transactionCode}</span></div>
-                            <div className="flex justify-between"><span>DATE:</span><span>{new Date().toLocaleString()}</span></div>
-                        </div>
-                        {cart.map(item => (
-                            <div key={item.cartItemId} className="text-[10px] font-mono mb-2">
-                                <p>{item.nama_produk}</p>
-                                <div className="flex justify-between">
-                                    <span>{item.qty} x {formatNumberWithDots(channel === 'online' ? item.harga_online : item.harga_offline)}</span>
-                                    <span>{formatNumberWithDots((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty)}</span>
-                                </div>
+                            <img src="/images/logo-houston.png" alt="Logo Houston" className="h-16 w-auto mx-auto mb-3 object-contain" />
+                            <h2 className="font-bold text-lg text-gray-900 uppercase leading-tight">{toko?.nama_toko || auth.user.name}</h2>
+                            {toko?.cabang && <p className="text-xs font-semibold text-gray-600 mt-0.5 uppercase">{toko.cabang}</p>}
+                            <div className="text-[10px] text-gray-500 mt-2 space-y-0.5">
+                                <p className="flex items-center justify-center gap-1 leading-tight">{toko?.alamat || 'Alamat Belum Diatur'}</p>
+                                <p className="flex items-center justify-center gap-1 font-mono">No. Telp {toko?.no_hp || '-'}</p>
                             </div>
-                        ))}
-                        <div className="border-t border-dashed pt-2 text-[10px] font-mono">
-                            <div className="flex justify-between font-bold"><span>TOTAL:</span><span>{formatRupiah(grandTotal)}</span></div>
-                            <div className="flex justify-between"><span>CASH:</span><span>{formatRupiah(customerMoney)}</span></div>
-                            <div className="flex justify-between"><span>CHANGE:</span><span>{formatRupiah(change)}</span></div>
                         </div>
-                        <p className="text-center text-[10px] mt-6">*** TERIMA KASIH ***</p>
+                        <div className="border-t border-b border-dashed border-gray-300 py-3 mb-4 space-y-1 text-[10px] text-gray-600 font-mono">
+                            <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900 uppercase">{transactionCode}</span></div>
+                            <div className="flex justify-between"><span>TANGGAL</span><span>{new Date().toLocaleDateString('id-ID')} {new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span></div>
+                            <div className="flex justify-between"><span>KASIR</span><span className="uppercase">{auth.user.name}</span></div>
+                            <div className="flex justify-between"><span>METODE</span><span className="uppercase font-bold">{paymentMethod}</span></div>
+                        </div>
+                        <div className="space-y-3 mb-6">
+                            {cart.map(item => (
+                                <div key={item.cartItemId} className="text-xs font-mono border-b border-gray-50 pb-2 last:border-0">
+                                    <div className="flex justify-between font-bold text-gray-900">
+                                        <span>{item.nama_produk} {item.variantName ? `(${item.variantName})` : ''}</span>
+                                    </div>
+                                    <div className="flex justify-between text-gray-500 mt-0.5">
+                                        <span>{item.qty} x {formatRupiah(channel === 'online' ? item.harga_online : item.harga_offline)}</span>
+                                        <span className="text-gray-900 font-bold">{formatRupiah((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="border-t border-gray-300 pt-3 space-y-1 text-xs font-mono">
+                            <div className="flex justify-between text-gray-600"><span>SUBTOTAL</span><span>{formatRupiah(subtotal)}</span></div>
+                            {discount > 0 && <div className="flex justify-between text-red-600"><span>DISKON</span><span>-{formatRupiah(discount)}</span></div>}
+                            <div className="flex justify-between font-bold text-sm text-gray-900 pt-2 border-t border-dashed border-gray-300 mt-2">
+                                <span>TOTAL</span>
+                                <span className="text-base">{formatRupiah(grandTotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-gray-600 pt-1"><span>BAYAR</span><span>{formatRupiah(customerMoney)}</span></div>
+                            <div className="flex justify-between text-gray-900 font-bold"><span>KEMBALI</span><span>{formatRupiah(change)}</span></div>
+                        </div>
+                        <div className="text-center mt-8 space-y-1">
+                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">*** TERIMA KASIH ***</p>
+                            <p className="text-[8px] text-gray-400">Barang yang dibeli tidak dapat ditukar</p>
+                        </div>
                     </div>
                 </div>
             )}
