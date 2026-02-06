@@ -258,7 +258,7 @@ export default function Create({ auth, products, toko }) {
                 </div>
 
                 {/* --- KANAN: CART --- */}
-                <div className={`fixed lg:static bottom-[75px] lg:bottom-0 inset-x-0 z-30 lg:z-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.15)] lg:shadow-none ${isCartExpanded ? 'h-[calc(100dvh-150px)] rounded-t-2xl' : 'h-[80px] rounded-t-xl lg:h-full lg:w-[380px] xl:w-[420px] lg:rounded-none'}`}>
+                <div className={`fixed lg:static bottom-16 md:bottom-0 lg:bottom-0 inset-x-0 z-30 lg:z-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.15)] lg:shadow-none ${isCartExpanded ? 'h-[calc(100dvh-150px)] rounded-t-2xl' : 'h-[80px] rounded-t-xl lg:h-full lg:w-[380px] xl:w-[420px] lg:rounded-none'}`}>
                     <div className="w-full h-6 flex justify-center items-center lg:hidden cursor-pointer bg-white rounded-t-xl shrink-0" onClick={() => setIsCartExpanded(!isCartExpanded)}><div className="w-12 h-1.5 bg-gray-300 rounded-full"></div></div>
                     <div className="px-5 pb-2 lg:py-4 border-b border-gray-100 flex justify-between items-center cursor-pointer lg:cursor-default shrink-0" onClick={() => window.innerWidth < 1024 && setIsCartExpanded(!isCartExpanded)}>
                         <div className="flex items-center gap-3">

@@ -117,7 +117,7 @@ export default function ProdukIndex({ produk, kategoris }) {
             <Head title="Katalog Produk" />
 
             {/* === HEADER & ACTIONS (MODIFIKASI: SINGLE ROW DI MOBILE) === */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Katalog Produk</h1>
                     <p className="text-sm text-gray-500 mt-1">
@@ -126,7 +126,7 @@ export default function ProdukIndex({ produk, kategoris }) {
                 </div>
 
                 {/* Container Filter & Actions */}
-                <div className="flex flex-col gap-3 w-full md:w-auto md:flex-row md:items-center">
+                <div className="flex flex-col gap-3 w-full lg:w-auto md:flex-row md:items-center md:flex-wrap">
 
                     {/* 1. Search Bar (Mobile: Row 1, Desktop: Flexible) */}
                     <div className="relative group w-full md:flex-1 md:min-w-[200px]">
@@ -138,7 +138,7 @@ export default function ProdukIndex({ produk, kategoris }) {
                             placeholder="Cari..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full rounded-xl border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-all"
+                            className="block w-full rounded-xl border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 focus:border-gray-300 focus:ring-0 shadow-sm transition-all"
                         />
                     </div>
 
@@ -158,30 +158,49 @@ export default function ProdukIndex({ produk, kategoris }) {
                                     control: (base, state) => ({
                                         ...base,
                                         borderRadius: '0.75rem',
-                                        borderColor: state.isFocused ? '#6366f1' : '#e5e7eb', // Border indigo saat focus, gray saat idle
+                                        borderColor: state.isFocused ? '#e5e7eb' : '#e5e7eb',
                                         paddingTop: '2px',
                                         paddingBottom: '2px',
-                                        boxShadow: 'none', // HILANGKAN BLUE BOX DEFAULT
+                                        boxShadow: 'none',
                                         '&:hover': {
-                                            borderColor: '#6366f1'
+                                            borderColor: '#e5e7eb'
                                         }
                                     }),
                                     menu: (base) => ({
                                         ...base,
                                         zIndex: 9999,
                                         borderRadius: '0.75rem',
-                                        overflow: 'hidden'
+                                        overflow: 'hidden',
+                                        marginTop: '4px',
+                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                                     }),
                                     option: (base, state) => ({
                                         ...base,
-                                        backgroundColor: state.isSelected ? '#6366f1' : (state.isFocused ? '#e0e7ff' : 'white'),
-                                        color: state.isSelected ? 'white' : '#1f2937',
+                                        backgroundColor: state.isSelected ? '#f3f4f6' : (state.isFocused ? '#f9fafb' : 'white'),
+                                        color: state.isSelected ? '#111827' : '#374151',
+                                        fontWeight: state.isSelected ? 600 : 400,
+                                        cursor: 'pointer',
+                                        fontSize: '0.875rem',
+                                        ':active': {
+                                            backgroundColor: '#e5e7eb'
+                                        }
                                     }),
                                     input: (base) => ({
                                         ...base,
                                         boxShadow: 'none !important',
                                         outline: 'none !important',
-                                    })
+                                        border: 'none !important',
+                                        'input:focus': {
+                                            boxShadow: 'none !important',
+                                        }
+                                    }),
+                                    dropdownIndicator: (base, state) => ({
+                                        ...base,
+                                        transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                        transition: 'transform 0.2s ease-in-out',
+                                        color: '#9ca3af'
+                                    }),
+                                    indicatorSeparator: () => ({ display: 'none' })
                                 }}
                             />
                         </div>
