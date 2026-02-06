@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\Transaksi;
 use App\Models\Produk;
+use App\Models\Kategori; // <--- Import Model Kategori
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -29,14 +30,9 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
         $this->endDate = $endDate ? Carbon::parse($endDate) : Carbon::now()->endOfMonth();
         $this->tokoId = Auth::user()->toko_id;
 
-        // Ambil Kategori dari Database
-        $this->categories = Produk::where('toko_id', $this->tokoId)
-            ->whereNotNull('kategori')
-            ->where('kategori', '!=', '')
-            ->distinct()
-            ->orderBy('kategori', 'ASC')
-            ->pluck('kategori')
-            ->toArray();
+        // --- UBAH DI SINI ---
+        // Ambil Objek Kategori dari Tabel Kategori, bukan string dari Produk
+        $this->categories = Kategori::orderBy('nama_kategori', 'ASC')->get();
     }
 
     public function collection()
@@ -44,6 +40,7 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
         $period = CarbonPeriod::create($this->startDate, $this->endDate);
         $data = [];
 
+        // Eager load detail.produk supaya hemat query
         $transactions = Transaksi::with(['detail.produk'])
             ->where('toko_id', $this->tokoId)
             ->whereDate('tanggal', '>=', $this->startDate)
@@ -52,7 +49,7 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
 
         foreach ($period as $date) {
             $currentDate = $date->format('Y-m-d');
-            
+
             // Filter transaksi hari ini
             $dailyTrx = $transactions->filter(function ($trx) use ($currentDate) {
                 return $trx->tanggal->format('Y-m-d') === $currentDate;
@@ -62,26 +59,26 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
             $row = [$currentDate];
 
             $dailyTotalQty = 0;
-            $dailyTotalNet = 0; 
+            $dailyTotalNet = 0;
             $dailyTotalDiskon = 0;
 
-            // --- LOOP PER KATEGORI ---
-            foreach ($this->categories as $category) {
+            // --- LOOP PER KATEGORI (Object Kategori) ---
+            foreach ($this->categories as $kategoriObj) {
                 $catQty = 0;
-                $catNet = 0;        // Uang Bersih (Subtotal - Diskon)
-                $catDiskonShare = 0; // Porsi Diskon
+                $catNet = 0;
+                $catDiskonShare = 0;
 
                 foreach ($dailyTrx as $trx) {
                     $trxGrossTotal = $trx->detail->sum('subtotal');
                     $trxDiscount = $trx->diskon_nominal;
 
                     foreach ($trx->detail as $detail) {
-                        if ($detail->produk && strcasecmp($detail->produk->kategori, $category) == 0) {
-                            
+                        // --- UBAH LOGIC PENCOCOKAN ---
+                        // Cek apakah produk ada DAN kategori_id produk sama dengan ID kategori yang sedang di-loop
+                        if ($detail->produk && $detail->produk->kategori_id == $kategoriObj->id) {
+
                             // 1. Hitung Proporsi Diskon
-                            $itemGross = $detail->subtotal; // Harga x Qty
-                            
-                            // (Harga Item / Total Nota) * Total Diskon Nota
+                            $itemGross = $detail->subtotal;
                             $contribution = $trxGrossTotal > 0 ? ($itemGross / $trxGrossTotal) : 0;
                             $share = $contribution * $trxDiscount;
 
@@ -98,8 +95,8 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
 
                 // Masukkan 3 Kolom per Kategori
                 $row[] = $catQty == 0 ? '' : $catQty;
-                $row[] = $catNet == 0 ? '' : $catNet;           // UANG (Net)
-                $row[] = $catDiskonShare == 0 ? '' : $catDiskonShare; // DISKON (Potongan)
+                $row[] = $catNet == 0 ? '' : $catNet;
+                $row[] = $catDiskonShare == 0 ? '' : $catDiskonShare;
 
                 // Akumulasi Total Harian
                 $dailyTotalQty += $catQty;
@@ -109,11 +106,11 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
 
             // --- TOTAL BARANG (Kanan) ---
             $row[] = $dailyTotalQty;
-            $row[] = $dailyTotalNet; 
+            $row[] = $dailyTotalNet;
             $row[] = $dailyTotalDiskon;
 
             // Spacer
-            $row[] = ''; 
+            $row[] = '';
             $row[] = $currentDate;
 
             // Cash & Non Cash
@@ -122,7 +119,7 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
 
             $row[] = $cash;
             $row[] = $nonCash;
-            $row[] = $cash + $nonCash; // Total Harian (Sama dengan Total Net Barang)
+            $row[] = $cash + $nonCash;
 
             $data[] = $row;
         }
@@ -136,10 +133,12 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
 
         // --- Header Baris 2 (Nama Kategori) ---
         $heading2 = ['TANGGAL'];
-        foreach ($this->categories as $category) {
-            $heading2[] = strtoupper($category);
-            $heading2[] = ''; // Spacer untuk Merge
-            $heading2[] = ''; // Spacer untuk Merge
+
+        // Loop objek kategori untuk ambil namanya
+        foreach ($this->categories as $kategoriObj) {
+            $heading2[] = strtoupper($kategoriObj->nama_kategori); // Pastikan kolom di DB 'nama_kategori'
+            $heading2[] = ''; // Spacer Merge
+            $heading2[] = ''; // Spacer Merge
         }
 
         // Header Statis Kanan
@@ -148,8 +147,8 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
         ]);
 
         // --- Header Baris 3 (QTY, UANG, DISKON) ---
-        $heading3 = ['']; 
-        foreach ($this->categories as $category) {
+        $heading3 = [''];
+        foreach ($this->categories as $kategoriObj) {
             $heading3[] = 'QTY';
             $heading3[] = 'UANG';
             $heading3[] = 'DISKON';
@@ -177,27 +176,27 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
         return [
             AfterSheet::class => function(AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                
-                // Hitung total kolom: (Jml Kategori * 3) + 1(Tgl) + 3(Total Kanan) + 1(Spacer) + 1(Tgl) + 3(Setoran)
-                // = (Cat * 3) + 9
-                $lastColumnIndex = count($this->categories) * 3 + 9;
+
+                // Hitung total kolom dinamis berdasarkan jumlah kategori
+                // $this->categories sekarang adalah Collection, jadi pakai ->count()
+                $lastColumnIndex = $this->categories->count() * 3 + 9;
                 $lastColumn = Coordinate::stringFromColumnIndex($lastColumnIndex);
 
                 // Merge Judul Utama
                 $sheet->mergeCells("A1:{$lastColumn}1");
                 $sheet->mergeCells('A2:A3'); // Tanggal Kiri
 
-                // --- MERGE HEADER KATEGORI (3 Kolom per Kategori) ---
+                // --- MERGE HEADER KATEGORI ---
                 $colIndex = 2; // Mulai dari Kolom B
                 foreach ($this->categories as $cat) {
                     $startCol = Coordinate::stringFromColumnIndex($colIndex);
                     $endCol = Coordinate::stringFromColumnIndex($colIndex + 2); // Merge 3 Kolom
-                    
+
                     $sheet->mergeCells("{$startCol}2:{$endCol}2");
                     $colIndex += 3; // Lompat 3 langkah
                 }
 
-                // --- MERGE HEADER 'TOTAL SEMUA' (3 Kolom) ---
+                // --- MERGE HEADER 'TOTAL SEMUA' ---
                 $startTotal = Coordinate::stringFromColumnIndex($colIndex);
                 $endTotal = Coordinate::stringFromColumnIndex($colIndex + 2);
                 $sheet->mergeCells("{$startTotal}2:{$endTotal}2");

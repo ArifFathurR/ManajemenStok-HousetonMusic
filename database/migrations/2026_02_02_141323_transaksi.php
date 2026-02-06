@@ -9,14 +9,14 @@ return new class extends Migration {
     {
         Schema::create('transaksi', function (Blueprint $table) {
             $table->id();
-
+            $table->string('kode_transaksi');
             $table->foreignId('toko_id')
-                  ->constrained('toko')
-                  ->cascadeOnDelete();
+                ->constrained('toko')
+                ->cascadeOnDelete();
 
             $table->foreignId('user_id')
-                  ->constrained('users')
-                  ->cascadeOnDelete();
+                ->constrained('users')
+                ->cascadeOnDelete();
 
             $table->enum('channel', ['online', 'offline']);
             $table->enum('metode_pembayaran', ['cash', 'debit', 'qr']);

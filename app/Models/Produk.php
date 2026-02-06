@@ -15,4 +15,9 @@ class Produk extends Model
     {
         return $this->hasMany(ProdukVarian::class, 'produk_id');
     }
+
+    public function kategoriRelasi()
+    {
+        return $this->belongsTo(Kategori::class, 'kategori_id');
+    }
 }

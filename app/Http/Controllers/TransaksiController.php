@@ -7,23 +7,21 @@ use App\Models\Transaksi;
 use App\Models\TransaksiDetail;
 use App\Models\Produk;
 use App\Models\ProdukVarian;
+use App\Models\Toko;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
 class TransaksiController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
         $tokoId = Auth::user()->toko_id;
 
-        // Filter berdasarkan channel dan tanggal
         $query = Transaksi::with(['user', 'detail.produk'])
             ->where('toko_id', $tokoId)
             ->orderBy('created_at', 'desc');
@@ -33,39 +31,40 @@ class TransaksiController extends Controller
             $query->where('channel', $request->channel);
         }
 
-        // 2. Filter Metode Pembayaran (BARU)
+        // 2. Filter Metode Pembayaran
         if ($request->filled('payment_method') && $request->payment_method != 'all') {
             $query->where('metode_pembayaran', $request->payment_method);
         }
 
-        // 3. Filter Tanggal
+        // 3. Filter Tanggal Mulai
         if ($request->filled('start_date')) {
             $query->whereDate('tanggal', '>=', $request->start_date);
         }
 
+        // 4. Filter Tanggal Akhir
         if ($request->filled('end_date')) {
             $query->whereDate('tanggal', '<=', $request->end_date);
         }
 
+        // 5. Search by kode_transaksi
+        if ($request->filled('search')) {
+            $query->where('kode_transaksi', 'like', '%' . $request->search . '%');
+        }
+
         $transaksi = $query->paginate(20);
 
-        // Statistik (Sama seperti sebelumnya)
         $stats = [
-            'total_online' => Transaksi::where('toko_id', $tokoId)
-                ->where('channel', 'online')
-                ->whereBetween('tanggal', [Carbon::now()->subDays(7), Carbon::now()])
-                ->sum('grand_total'),
-            'total_offline' => Transaksi::where('toko_id', $tokoId)
-                ->where('channel', 'offline')
-                ->whereBetween('tanggal', [Carbon::now()->subDays(7), Carbon::now()])
-                ->sum('grand_total'),
+            'total_online' => Transaksi::where('toko_id', $tokoId)->where('channel', 'online')->sum('grand_total'),
+            'total_offline' => Transaksi::where('toko_id', $tokoId)->where('channel', 'offline')->sum('grand_total'),
         ];
+
+        $toko = Toko::find($tokoId);
 
         return Inertia::render('Transaksi/Index', [
             'transaksi' => $transaksi,
             'stats' => $stats,
-            // Tambahkan payment_method ke props filters
-            'filters' => $request->only(['channel', 'start_date', 'end_date', 'payment_method'])
+            'toko' => $toko,
+            'filters' => $request->only(['channel', 'start_date', 'end_date', 'search', 'payment_method'])
         ]);
     }
 
@@ -84,40 +83,33 @@ class TransaksiController extends Controller
      */
     public function create()
     {
-        $tokoId = Auth::user()->toko_id;
+        $user = Auth::user();
+        $tokoId = $user->toko_id;
+        $toko = Toko::find($tokoId);
 
-        // Ambil produk dengan varian
         $produk = Produk::with('varian')
             ->where('toko_id', $tokoId)
             ->get()
             ->map(function ($item) {
-                // LOGIC FIX: Kirim raw path dari database, jangan diubah-ubah disini.
-                // Menggunakan 'gambar_utama' sesuai referensi ProdukController Anda.
-
                 return [
                     'id' => $item->id,
                     'nama_produk' => $item->nama_produk,
                     'kategori' => $item->kategori,
-
-                    // Kirim path gambar apa adanya
+                    // Kirim raw path gambar dari DB
                     'gambar_utama' => $item->gambar_utama,
-
                     'is_variant' => $item->is_variant,
                     'variants' => $item->varian->map(function ($varian) {
                         return [
                             'id' => $varian->id,
                             'name' => $varian->nama_varian ?? 'Default',
                             'stok' => $varian->stok,
-
-                            // Kirim path gambar varian apa adanya
                             'gambar' => $varian->gambar,
-
                             'harga_online' => $varian->harga_online,
                             'harga_offline' => $varian->harga_offline,
                             'satuan' => $varian->satuan,
                         ];
                     }),
-                    // Untuk produk tanpa varian, ambil data dari varian pertama
+                    // Data fallback jika non-varian
                     'stok' => $item->varian->first()->stok ?? 0,
                     'harga_online' => $item->varian->first()->harga_online ?? 0,
                     'harga_offline' => $item->varian->first()->harga_offline ?? 0,
@@ -126,19 +118,17 @@ class TransaksiController extends Controller
             });
 
         return Inertia::render('Transaksi/Create', [
-            'products' => $produk
+            'products' => $produk,
+            'toko' => $toko,
+            'user' => $user,
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $request->validate([
             'cart' => 'required|array|min:1',
             'cart.*.id' => 'required|exists:produk,id',
-            'cart.*.variantId' => 'nullable|exists:produk_varian,id',
             'cart.*.qty' => 'required|integer|min:1',
             'channel' => 'required|in:online,offline',
             'paymentMethod' => 'required|in:cash,debit,qr',
@@ -151,61 +141,62 @@ class TransaksiController extends Controller
         try {
             $tokoId = Auth::user()->toko_id;
             $userId = Auth::id();
-
             $total = 0;
             $cartItems = [];
 
-            // Validasi stok dan hitung total
+            // 1. Validasi Stok & Hitung Subtotal
             foreach ($request->cart as $item) {
                 $varianId = $item['variantId'] ?? null;
 
-                // Cari varian
                 if ($varianId) {
-                    $varian = ProdukVarian::findOrFail($varianId);
+                    $varian = ProdukVarian::with('produk')->find($varianId);
                 } else {
-                    // Ambil varian default (pertama)
-                    $varian = ProdukVarian::where('produk_id', $item['id'])->firstOrFail();
+                    $varian = ProdukVarian::with('produk')->where('produk_id', $item['id'])->first();
                 }
 
-                // Cek stok
+                if (!$varian) {
+                    throw new \Exception("Produk tidak valid (ID: {$item['id']})");
+                }
+
                 if ($varian->stok < $item['qty']) {
-                    throw new \Exception("Stok {$varian->produk->nama_produk} tidak mencukupi. Tersedia: {$varian->stok}");
+                    throw new \Exception("Stok '{$varian->produk->nama_produk}' kurang. Sisa: {$varian->stok}");
                 }
 
-                // Ambil harga sesuai channel
-                $harga = $request->channel === 'online'
-                    ? $varian->harga_online
-                    : $varian->harga_offline;
-
-                $subtotal = $harga * $item['qty'];
-                $total += $subtotal;
+                $harga = $request->channel === 'online' ? $varian->harga_online : $varian->harga_offline;
+                $subtotalHitung = $harga * $item['qty'];
+                $total += $subtotalHitung;
 
                 $cartItems[] = [
                     'produk_id' => $item['id'],
                     'varian_id' => $varian->id,
                     'qty' => $item['qty'],
                     'harga_satuan' => $harga,
-                    'subtotal' => $subtotal,
+                    'subtotal' => $subtotalHitung,
                     'varian_obj' => $varian
                 ];
             }
 
-            // Hitung grand total
+            // 2. Hitung Grand Total
             $diskon = $request->discount ?? 0;
             $grandTotal = max(0, $total - $diskon);
 
-            // Validasi pembayaran cash
+            // 3. Validasi Pembayaran
             if ($request->paymentMethod === 'cash') {
                 $customerMoney = $request->customerMoney ?? 0;
                 if ($customerMoney < $grandTotal) {
-                    throw new \Exception("Uang pembayaran tidak mencukupi");
+                    throw new \Exception("Uang pembayaran kurang Rp " . number_format($grandTotal - $customerMoney));
                 }
             }
 
-            // Simpan transaksi
+            // 4. Generate Kode Transaksi Unik
+            // Format: TRX-YYYYMMDDHHMMSS-RANDOM
+            $kodeUnik = 'TRX-' . now()->format('YmdHis') . '-' . rand(100, 999);
+
+            // 5. Simpan Header Transaksi
             $transaksi = Transaksi::create([
                 'toko_id' => $tokoId,
                 'user_id' => $userId,
+                'kode_transaksi' => $kodeUnik, 
                 'channel' => $request->channel,
                 'metode_pembayaran' => $request->paymentMethod,
                 'total' => $total,
@@ -214,7 +205,7 @@ class TransaksiController extends Controller
                 'tanggal' => now(),
             ]);
 
-            // Simpan detail transaksi dan kurangi stok
+            // 6. Simpan Detail & Kurangi Stok
             foreach ($cartItems as $item) {
                 TransaksiDetail::create([
                     'transaksi_id' => $transaksi->id,
@@ -224,7 +215,6 @@ class TransaksiController extends Controller
                     'subtotal' => $item['subtotal'],
                 ]);
 
-                // Kurangi stok
                 $item['varian_obj']->decrement('stok', $item['qty']);
             }
 
@@ -232,57 +222,48 @@ class TransaksiController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transaksi berhasil disimpan',
-                'transaksi_id' => $transaksi->id,
+                'message' => 'Transaksi berhasil!',
+                'kode_transaksi' => $kodeUnik, // Kirim balik ke frontend untuk struk
                 'grand_total' => $grandTotal,
-                'change' => $request->paymentMethod === 'cash'
-                    ? max(0, ($request->customerMoney ?? 0) - $grandTotal)
-                    : 0
+                'change' => $request->paymentMethod === 'cash' ? max(0, ($request->customerMoney ?? 0) - $grandTotal) : 0
             ]);
+
         } catch (\Exception $e) {
             DB::rollBack();
-
-            // Log error untuk debugging
-            Log::error('Transaction Error', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 422);
+            // Return 422 agar frontend menangkap sebagai error validasi/logic
+            return response()->json(['message' => $e->getMessage()], 422);
         }
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
+    public function show($kode_transaksi)
+    {
+        $transaksi = Transaksi::with(['user', 'toko', 'detail.produk.varian'])
+            ->where('kode_transaksi', $kode_transaksi)
+            ->firstOrFail();
+
+        return response()->json([
+            'success' => true,
+            'data' => $transaksi
+        ]);
+    }
+
     public function destroy(Transaksi $transaksi)
     {
-        // Pastikan transaksi milik toko user
-        if ($transaksi->toko_id !== Auth::user()->toko_id) {
+        if ($transaksi->toko_id !== Auth::user()->toko_id)
             abort(403);
-        }
-
         DB::beginTransaction();
-
         try {
-            // Kembalikan stok
             foreach ($transaksi->detail as $detail) {
                 $varian = ProdukVarian::where('produk_id', $detail->produk_id)->first();
-                if ($varian) {
+                if ($varian)
                     $varian->increment('stok', $detail->qty);
-                }
             }
-
             $transaksi->delete();
             DB::commit();
-
-            return redirect()->back()->with('success', 'Transaksi berhasil dihapus');
+            return redirect()->back()->with('success', 'Transaksi dihapus');
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()->with('error', 'Gagal menghapus transaksi');
+            return redirect()->back()->with('error', 'Gagal hapus');
         }
     }
 }
