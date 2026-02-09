@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Select from 'react-select';
 import GeneralLayout from '@/Layouts/GeneralLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 import {
@@ -208,16 +209,73 @@ export default function Index({ transaksi, stats, filters, toko }) {
                     </div>
 
                     <div className={`px-4 pb-4 md:pt-4 transition-all duration-300 ease-in-out ${showFilters ? 'block opacity-100' : 'hidden md:block opacity-0 md:opacity-100'}`}>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end pt-2 border-t border-gray-50 md:border-0">
-                            <div className="space-y-1.5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end pt-2 border-t border-gray-50 md:border-0">
+                            <div className="space-y-1.5 z-20">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Channel</label>
-                                <select value={filterValues.channel} onChange={(e) => handleFilter('channel', e.target.value)} className="w-full border-gray-200 rounded-xl text-sm font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50">
-                                    <option value="all">Semua Channel</option>
-                                    <option value="offline">Offline Store</option>
-                                    <option value="online">Online Store</option>
-                                </select>
+                                <Select
+                                    options={[
+                                        { value: 'all', label: 'Semua Channel' },
+                                        { value: 'offline', label: 'Offline Store' },
+                                        { value: 'online', label: 'Online Store' }
+                                    ]}
+                                    value={[
+                                        { value: 'all', label: 'Semua Channel' },
+                                        { value: 'offline', label: 'Offline Store' },
+                                        { value: 'online', label: 'Online Store' }
+                                    ].find(opt => opt.value === filterValues.channel)}
+                                    onChange={(option) => handleFilter('channel', option.value)}
+                                    styles={{
+                                        control: (base, state) => ({
+                                            ...base,
+                                            borderRadius: '0.75rem',
+                                            borderColor: state.isFocused ? '#e5e7eb' : '#e5e7eb',
+                                            paddingTop: '2px',
+                                            paddingBottom: '2px',
+                                            boxShadow: 'none',
+                                            '&:hover': {
+                                                borderColor: '#e5e7eb'
+                                            }
+                                        }),
+                                        menu: (base) => ({
+                                            ...base,
+                                            zIndex: 9999,
+                                            borderRadius: '0.75rem',
+                                            overflow: 'hidden',
+                                            marginTop: '4px',
+                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                                        }),
+                                        option: (base, state) => ({
+                                            ...base,
+                                            backgroundColor: state.isSelected ? '#f3f4f6' : (state.isFocused ? '#f9fafb' : 'white'),
+                                            color: state.isSelected ? '#111827' : '#374151',
+                                            fontWeight: state.isSelected ? 600 : 400,
+                                            cursor: 'pointer',
+                                            fontSize: '0.875rem',
+                                            ':active': {
+                                                backgroundColor: '#e5e7eb'
+                                            }
+                                        }),
+                                        input: (base) => ({
+                                            ...base,
+                                            boxShadow: 'none !important',
+                                            outline: 'none !important',
+                                            border: 'none !important',
+                                            'input:focus': {
+                                                boxShadow: 'none !important',
+                                            }
+                                        }),
+                                        dropdownIndicator: (base, state) => ({
+                                            ...base,
+                                            transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                            transition: 'transform 0.2s ease-in-out',
+                                            color: '#9ca3af'
+                                        }),
+                                        indicatorSeparator: () => ({ display: 'none' })
+                                    }}
+                                    className="text-sm font-medium"
+                                />
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 z-10">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Pembayaran</label>
                                 <select value={filterValues.payment_method} onChange={(e) => handleFilter('payment_method', e.target.value)} className="w-full border-gray-200 rounded-xl text-sm font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50">
                                     <option value="all">Semua Metode</option>
@@ -232,7 +290,7 @@ export default function Index({ transaksi, stats, filters, toko }) {
                                 <div className="flex flex-col sm:flex-row gap-2">
                                     {/* Wrapper Input Tanggal + Reset */}
                                     <div className="flex items-center gap-2 flex-1 w-full">
-                                        <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+                                        <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:border-gray-300 focus:ring-0 py-2.5 bg-gray-50/50" />
                                         <span className="text-gray-300 font-bold">-</span>
                                         <input type="date" value={filterValues.end_date} onChange={(e) => handleFilter('end_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
 
