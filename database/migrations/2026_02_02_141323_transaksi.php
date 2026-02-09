@@ -19,7 +19,7 @@ return new class extends Migration {
                 ->cascadeOnDelete();
 
             $table->enum('channel', ['online', 'offline']);
-            $table->enum('metode_pembayaran', ['cash', 'debit', 'qr']);
+            $table->enum('metode_pembayaran', ['cash', 'debit', 'qr', 'split']);
 
             $table->decimal('total', 14, 2);
             $table->decimal('diskon_nominal', 14, 2)->default(0);

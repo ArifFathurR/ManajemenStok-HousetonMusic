@@ -46,8 +46,12 @@ class ProdukController extends Controller
             ];
         });
 
+        // Ambil semua kategori untuk filter
+        $kategoris = Kategori::select('id', 'nama_kategori')->get();
+
         return Inertia::render('Produk/Index', [
-            'produk' => $produk
+            'produk' => $produk,
+            'kategoris' => $kategoris
         ]);
     }
 

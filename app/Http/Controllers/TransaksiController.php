@@ -22,7 +22,7 @@ class TransaksiController extends Controller
     {
         $tokoId = Auth::user()->toko_id;
 
-        $query = Transaksi::with(['user', 'detail.produk'])
+        $query = Transaksi::with(['user', 'detail.produk', 'pembayaran'])
             ->where('toko_id', $tokoId)
             ->orderBy('created_at', 'desc');
 
@@ -131,7 +131,10 @@ class TransaksiController extends Controller
             'cart.*.id' => 'required|exists:produk,id',
             'cart.*.qty' => 'required|integer|min:1',
             'channel' => 'required|in:online,offline',
-            'paymentMethod' => 'required|in:cash,debit,qr',
+            'paymentMethod' => 'required|in:cash,debit,qr,split', // Support split
+            'payments' => 'nullable|array', // Array of {method, nominal}
+            'payments.*.method' => 'required_with:payments|in:cash,debit,qr',
+            'payments.*.nominal' => 'required_with:payments|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'customerMoney' => 'nullable|numeric|min:0',
         ]);
@@ -162,7 +165,10 @@ class TransaksiController extends Controller
                     throw new \Exception("Stok '{$varian->produk->nama_produk}' kurang. Sisa: {$varian->stok}");
                 }
 
-                $harga = $request->channel === 'online' ? $varian->harga_online : $varian->harga_offline;
+                // Cek flag bonus
+                $isBonus = $item['is_bonus'] ?? false;
+                $harga = $isBonus ? 0 : ($request->channel === 'online' ? $varian->harga_online : $varian->harga_offline);
+                
                 $subtotalHitung = $harga * $item['qty'];
                 $total += $subtotalHitung;
 
@@ -181,11 +187,52 @@ class TransaksiController extends Controller
             $grandTotal = max(0, $total - $diskon);
 
             // 3. Validasi Pembayaran
-            if ($request->paymentMethod === 'cash') {
-                $customerMoney = $request->customerMoney ?? 0;
-                if ($customerMoney < $grandTotal) {
-                    throw new \Exception("Uang pembayaran kurang Rp " . number_format($grandTotal - $customerMoney));
+            $paymentsToSave = [];
+            $totalPaid = 0;
+            $change = 0;
+
+            if ($request->paymentMethod === 'split') {
+                if (empty($request->payments)) {
+                    throw new \Exception("Metode split memerlukan rincian pembayaran.");
                 }
+
+                foreach ($request->payments as $p) {
+                    $nominal = (float) $p['nominal'];
+                    if ($nominal > 0) {
+                        $paymentsToSave[] = [
+                            'metode_pembayaran' => $p['method'],
+                            'nominal' => $nominal,
+                            'keterangan' => $p['keterangan'] ?? null
+                        ];
+                        $totalPaid += $nominal;
+                    }
+                }
+
+                if ($totalPaid < $grandTotal) {
+                     throw new \Exception("Total pembayaran kurang Rp " . number_format($grandTotal - $totalPaid));
+                }
+                
+                // Kembalian (asumsi kembalian tunai jika ada kelebihan)
+                $change = max(0, $totalPaid - $grandTotal);
+
+            } else {
+                // Single Payment (Cash / Debit / QR)
+                $nominalBayar = ($request->paymentMethod === 'cash') ? ($request->customerMoney ?? 0) : $grandTotal;
+                
+                if ($request->paymentMethod === 'cash' && $nominalBayar < $grandTotal) {
+                     throw new \Exception("Uang pembayaran kurang Rp " . number_format($grandTotal - $nominalBayar));
+                }
+
+                $totalPaid = $nominalBayar;
+                $change = max(0, $totalPaid - $grandTotal);
+
+                // Entry tunggal untuk keseragaman data di tabel transaksi_pembayaran?
+                // Opsional: kita simpan juga di tabel pembayaran agar konsisten
+                $paymentsToSave[] = [
+                    'metode_pembayaran' => $request->paymentMethod,
+                    'nominal' => $totalPaid, // Simpan total yang diberi customer
+                    'keterangan' => 'Single Payment'
+                ];
             }
 
             // 4. Generate Kode Transaksi Unik
@@ -218,6 +265,16 @@ class TransaksiController extends Controller
                 $item['varian_obj']->decrement('stok', $item['qty']);
             }
 
+            // 7. Simpan Riwayat Pembayaran
+            foreach ($paymentsToSave as $pay) {
+                \App\Models\TransaksiPembayaran::create([
+                    'transaksi_id' => $transaksi->id,
+                    'metode_pembayaran' => $pay['metode_pembayaran'],
+                    'nominal' => $pay['nominal'],
+                    'keterangan' => $pay['keterangan'] ?? null,
+                ]);
+            }
+
             DB::commit();
 
             return response()->json([
@@ -225,7 +282,7 @@ class TransaksiController extends Controller
                 'message' => 'Transaksi berhasil!',
                 'kode_transaksi' => $kodeUnik, // Kirim balik ke frontend untuk struk
                 'grand_total' => $grandTotal,
-                'change' => $request->paymentMethod === 'cash' ? max(0, ($request->customerMoney ?? 0) - $grandTotal) : 0
+                'change' => $change
             ]);
 
         } catch (\Exception $e) {
@@ -237,7 +294,7 @@ class TransaksiController extends Controller
 
     public function show($kode_transaksi)
     {
-        $transaksi = Transaksi::with(['user', 'toko', 'detail.produk.varian'])
+        $transaksi = Transaksi::with(['user', 'toko', 'detail.produk.varian', 'pembayaran'])
             ->where('kode_transaksi', $kode_transaksi)
             ->firstOrFail();
 

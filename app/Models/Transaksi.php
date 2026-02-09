@@ -51,6 +51,11 @@ class Transaksi extends Model
         return $this->hasMany(TransaksiDetail::class, 'transaksi_id');
     }
 
+    public function pembayaran()
+    {
+        return $this->hasMany(TransaksiPembayaran::class, 'transaksi_id');
+    }
+
     /**
      * Scope transaksi online
      */

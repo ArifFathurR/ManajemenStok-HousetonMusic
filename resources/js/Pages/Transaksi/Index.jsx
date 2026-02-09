@@ -41,6 +41,7 @@ const PaymentBadge = ({ method }) => {
         cash: 'bg-green-100 text-green-700 border-green-200',
         debit: 'bg-blue-100 text-blue-700 border-blue-200',
         qr: 'bg-purple-100 text-purple-700 border-purple-200',
+        split: 'bg-orange-100 text-orange-700 border-orange-200',
         all: 'bg-gray-100 text-gray-700 border-gray-200'
     };
     return (
@@ -223,23 +224,32 @@ export default function Index({ transaksi, stats, filters, toko }) {
                                     <option value="cash">Tunai (Cash)</option>
                                     <option value="debit">Debit Card</option>
                                     <option value="qr">QRIS</option>
+                                    <option value="split">Split Payment</option>
                                 </select>
                             </div>
                             <div className="col-span-1 md:col-span-2 space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rentang Tanggal & Aksi</label>
-                                <div className="flex gap-2 items-center">
-                                    <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
-                                    <span className="text-gray-300 font-bold">-</span>
-                                    <input type="date" value={filterValues.end_date} onChange={(e) => handleFilter('end_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    {/* Wrapper Input Tanggal + Reset */}
+                                    <div className="flex items-center gap-2 flex-1 w-full">
+                                        <input type="date" value={filterValues.start_date} onChange={(e) => handleFilter('start_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
+                                        <span className="text-gray-300 font-bold">-</span>
+                                        <input type="date" value={filterValues.end_date} onChange={(e) => handleFilter('end_date', e.target.value)} className="w-full border-gray-200 rounded-xl text-xs font-medium focus:ring-black focus:border-black py-2.5 bg-gray-50/50" />
 
-                                    {/* Tombol Reset */}
-                                    <button onClick={resetFilter} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200" title="Reset Filter"><ArrowPathIcon className="w-5 h-5" /></button>
+                                        {/* Tombol Reset (Moved here) */}
+                                        <button onClick={resetFilter} className="shrink-0 p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors border border-gray-200" title="Reset Filter">
+                                            <ArrowPathIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
 
-                                    {/* Tombol Export Excel */}
-                                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95" title="Export Excel">
-                                        <DocumentArrowDownIcon className="w-5 h-5" />
-                                        <span className="hidden md:inline">Export</span>
-                                    </button>
+                                    {/* Wrapper Tombol Export */}
+                                    <div className="flex gap-2 shrink-0">
+                                        {/* Tombol Export Excel */}
+                                        <button onClick={handleExport} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95" title="Export Excel">
+                                            <DocumentArrowDownIcon className="w-5 h-5" />
+                                            <span>Export</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -345,7 +355,7 @@ export default function Index({ transaksi, stats, filters, toko }) {
                         <div className="bg-white px-6 pb-4 pt-4 md:pt-6 border-b border-gray-100 flex justify-between items-start sticky top-0 z-10">
                             <div>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Detail Transaksi</p>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                     <h3 className="text-2xl font-black text-gray-900">#{selectedTrx.kode_transaksi || selectedTrx.id}</h3>
                                     <PaymentBadge method={selectedTrx.metode_pembayaran} />
                                 </div>
@@ -358,7 +368,7 @@ export default function Index({ transaksi, stats, filters, toko }) {
                         <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 custom-scrollbar">
                             <div className="space-y-4">
                                 {selectedTrx.detail?.map((detail, index) => (
-                                    <div key={index} className="flex gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                    <div key={index} className="flex gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
                                         <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center">
                                             {detail.produk?.gambar_utama ? (
                                                 <img src={`/storage/${detail.produk.gambar_utama}`} alt={detail.produk.nama_produk} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
@@ -379,17 +389,41 @@ export default function Index({ transaksi, stats, filters, toko }) {
                             </div>
                         </div>
 
-                        {/* Modal Footer: Totals & Button */}
-                        <div className="bg-white px-6 py-6 border-t border-gray-100 space-y-3 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.05)] z-10 pb-8 md:pb-6">
-                            <div className="flex justify-between text-sm text-gray-500"><span>Subtotal</span><span className="font-bold text-gray-700">{formatRupiah(selectedTrx.total)}</span></div>
-                            {Number(selectedTrx.diskon_nominal) > 0 && (
-                                <div className="flex justify-between text-sm text-red-500"><span className="flex items-center gap-1">Diskon <span className="text-[10px] bg-red-100 px-1.5 rounded font-bold">HEMAT</span></span><span className="font-bold">- {formatRupiah(selectedTrx.diskon_nominal)}</span></div>
+                        {/* Modal Footer: Totals & Details */}
+                        <div className="bg-white px-6 py-6 border-t border-gray-100 space-y-4 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.05)] z-10 pb-8 md:pb-6">
+                            {/* Rincian Pembayaran Box for Split */}
+                            {selectedTrx.metode_pembayaran === 'split' && selectedTrx.pembayaran && (
+                                <div className="bg-orange-50 rounded-xl p-3 border border-orange-100">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="p-1 bg-orange-100 rounded-full"><FunnelIcon className="w-3 h-3 text-orange-600" /></div>
+                                        <span className="text-xs font-bold text-orange-800 uppercase">Rincian Split Payment</span>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        {selectedTrx.pembayaran.map((p, i) => (
+                                            <div key={i} className="flex justify-between text-xs">
+                                                <span className="text-gray-600 uppercase flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-300"></span>
+                                                    {p.metode_pembayaran}
+                                                </span>
+                                                <span className="font-bold text-gray-800">{formatRupiah(p.nominal)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
-                            <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-200">
-                                <span className="text-sm font-bold text-gray-900 uppercase tracking-widest">Grand Total</span>
-                                <span className="text-2xl font-black text-gray-900">{formatRupiah(selectedTrx.grand_total)}</span>
+
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm text-gray-500"><span>Subtotal</span><span className="font-bold text-gray-700">{formatRupiah(selectedTrx.total)}</span></div>
+                                {Number(selectedTrx.diskon_nominal) > 0 && (
+                                    <div className="flex justify-between text-sm text-red-500"><span className="flex items-center gap-1">Diskon <span className="text-[10px] bg-red-100 px-1.5 rounded font-bold">HEMAT</span></span><span className="font-bold">- {formatRupiah(selectedTrx.diskon_nominal)}</span></div>
+                                )}
+                                <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-200">
+                                    <span className="text-sm font-bold text-gray-900 uppercase tracking-widest">Grand Total</span>
+                                    <span className="text-2xl font-black text-gray-900">{formatRupiah(selectedTrx.grand_total)}</span>
+                                </div>
                             </div>
-                            <button onClick={handlePrint} className="w-full mt-2 py-3 bg-black text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-lg active:scale-[0.98]">
+
+                            <button onClick={handlePrint} className="w-full py-3.5 bg-black text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-lg active:scale-[0.98]">
                                 <PrinterIcon className="w-5 h-5" /> Cetak Struk
                             </button>
                         </div>
@@ -419,9 +453,19 @@ export default function Index({ transaksi, stats, filters, toko }) {
 
                         <div className="border-t border-b border-dashed border-gray-300 py-3 mb-4 space-y-1 text-[10px] text-gray-600 font-mono">
                             <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900 uppercase">{selectedTrx.kode_transaksi || selectedTrx.id}</span></div>
-                            <div className="flex justify-between"><span>TANGGAL</span><span>{new Date(selectedTrx.tanggal).toLocaleDateString('id-ID')} {new Date(selectedTrx.tanggal).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span></div>
+                            <div className="flex justify-between"><span>TANGGAL</span><span>{new Date(selectedTrx.tanggal).toLocaleDateString('id-ID')} {new Date(selectedTrx.tanggal).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span></div>
                             <div className="flex justify-between"><span>KASIR</span><span className="uppercase">{selectedTrx.user?.name || '-'}</span></div>
                             <div className="flex justify-between"><span>METODE</span><span className="uppercase font-bold">{selectedTrx.metode_pembayaran}</span></div>
+                            {selectedTrx.metode_pembayaran === 'split' && selectedTrx.pembayaran && (
+                                <div className="mt-1 border-t border-dashed border-gray-200 pt-1">
+                                    {selectedTrx.pembayaran.map((p, i) => (
+                                        <div key={i} className="flex justify-between text-[9px]">
+                                            <span className="uppercase">- {p.metode_pembayaran}</span>
+                                            <span>{formatRupiah(p.nominal)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Items */}

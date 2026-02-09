@@ -51,19 +51,30 @@ class DashboardController extends Controller
             ->count('kategori_id');       // Hitung jumlahnya
 
         // 4. GRAFIK TREN
-        $chartData = Transaksi::where('toko_id', $tokoId)
-            ->whereMonth('tanggal', $now->month)
-            ->whereYear('tanggal', $now->year)
+        // 4. GRAFIK TREN (FULL MONTH)
+        $startDate = $now->copy()->startOfMonth();
+        $endDate = $now->copy()->endOfMonth();
+
+        $transactions = Transaksi::where('toko_id', $tokoId)
+            ->whereBetween('tanggal', [$startDate, $endDate])
             ->selectRaw('DATE(tanggal) as date, SUM(grand_total) as total')
             ->groupBy('date')
-            ->orderBy('date', 'asc')
             ->get()
-            ->map(function ($item) {
-                return [
-                    'date' => Carbon::parse($item->date)->format('d M'),
-                    'total' => (float) $item->total
-                ];
-            });
+            ->keyBy('date'); // Key by Y-m-d
+
+        $chartData = [];
+        $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
+
+        foreach ($period as $date) {
+            $dateKey = $date->format('Y-m-d');
+            $chartData[] = [
+                'date' => $date->format('d'), // Tampilkan tanggal saja (1, 2, 3...)
+                'full_date' => $date->format('d M Y'), // Untuk tooltip
+                'total' => isset($transactions[$dateKey]) ? (float) $transactions[$dateKey]->total : 0
+            ];
+        }
+        
+        $currentMonthName = $now->locale('id')->isoFormat('MMMM Y');
 
         // 5. TOP 5 PRODUK
         $topProducts = TransaksiDetail::whereHas('transaksi', fn($q) => $q->where('toko_id', $tokoId)
@@ -123,6 +134,7 @@ class DashboardController extends Controller
                 'persen_terjual' => $persenTerjual,
                 'total_kategori' => $totalKategori,
             ],
+            'current_month_name' => $currentMonthName,
             'chart_data' => $chartData,
             'top_products' => $topProducts,
             'low_stock_variants' => $lowStockVariants,

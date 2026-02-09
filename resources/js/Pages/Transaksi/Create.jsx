@@ -18,10 +18,17 @@ export default function Create({ auth, products, toko }) {
     const [search, setSearch] = useState('');
     const [channel, setChannel] = useState('offline');
     const [paymentMethod, setPaymentMethod] = useState('cash');
-    
+
+    // State angka murni (untuk kalkulasi)
     const [discount, setDiscount] = useState(0);
     const [customerMoney, setCustomerMoney] = useState(0);
-    
+
+    // Split Payment State
+    const [splitPayments, setSplitPayments] = useState([
+        { method: 'cash', nominal: 0 },
+        { method: 'debit', nominal: 0 }
+    ]);
+
     const [showReceipt, setShowReceipt] = useState(false);
     const [isCartExpanded, setIsCartExpanded] = useState(false);
     const [transactionCode, setTransactionCode] = useState("");
@@ -31,14 +38,23 @@ export default function Create({ auth, products, toko }) {
     const [showVariantModal, setShowVariantModal] = useState(false);
     const [imageErrors, setImageErrors] = useState({});
 
-    // --- HELPER FORMATTING ---
-    const formatDisplay = (value) => {
-        if (!value) return '';
-        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    // Bonus Feature State
+    const [showBonusModal, setShowBonusModal] = useState(false);
+    const [bonusSearch, setBonusSearch] = useState('');
+    const [expandedBonusId, setExpandedBonusId] = useState(null); // Track expanded product in bonus modal
+
+    // --- HELPERS UNTUK FORMAT TITIK ---
+
+    // Mengubah angka ke format titik (1000 -> 1.000)
+    const formatNumberWithDots = (val) => {
+        if (val === 0 || !val) return '';
+        return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     };
 
-    const parseRaw = (displayValue) => {
-        return Number(displayValue.replace(/\./g, '')) || 0;
+    // Mengubah input teks dengan titik kembali ke angka murni
+    const handleNumberInput = (setter) => (e) => {
+        const rawValue = e.target.value.replace(/\D/g, ''); // Hapus semua karakter non-angka
+        setter(Number(rawValue));
     };
 
     const formatRupiah = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
@@ -64,22 +80,30 @@ export default function Create({ auth, products, toko }) {
         if (product.variants && product.variants.length > 0) {
             setSelectedProduct(product); setShowVariantModal(true);
         } else {
-            if (product.stok <= 0) { 
-                showAlert('Stok produk habis', 'error'); 
-                return; 
-            }
+            if (product.stok <= 0) { showAlert('Stok produk habis', 'error'); return; }
             addToCart(product, null);
         }
     };
 
-    const addToCart = (product, variant) => {
+    const addToCart = (product, variant, isBonus = false) => {
         const variantId = variant ? variant.id : null;
-        const cartItemId = variant ? `${product.id}-${variant.id}` : `${product.id}`;
+        // CartItemId unik: product-variant-bonusStatus
+        const cartItemId = variant
+            ? `${product.id}-${variant.id}${isBonus ? '-bonus' : ''}`
+            : `${product.id}${isBonus ? '-bonus' : ''}`;
+
         const availableStock = variant ? variant.stok : product.stok;
         const existing = cart.find(item => item.cartItemId === cartItemId);
         const currentQty = existing ? existing.qty : 0;
 
-        if (currentQty >= availableStock) {
+        // Cek stok gabungan (Bonus + Normal harus <= Stok) -> Agak kompleks kalau dipisah itemnya
+        // Simplifikasi: Cek stok per item keranjang dulu. 
+        // Idealnya: hitung total qty produk ini di keranjang (bonus + normal)
+        const allInCartQty = cart.filter(i =>
+            (i.id === product.id) && (i.variantId === variantId)
+        ).reduce((acc, curr) => acc + curr.qty, 0);
+
+        if ((allInCartQty + 1) > availableStock) {
             showAlert(`Stok tidak cukup. Sisa: ${availableStock}`, 'error'); return;
         }
 
@@ -90,12 +114,14 @@ export default function Create({ auth, products, toko }) {
                 ...product, cartItemId, variantId,
                 variantName: variant ? variant.name : null,
                 qty: 1, stok: availableStock,
-                harga_online: variant ? variant.harga_online : product.harga_online,
-                harga_offline: variant ? variant.harga_offline : product.harga_offline,
-                gambar_utama: variant && variant.gambar ? variant.gambar : product.gambar_utama
+                harga_online: isBonus ? 0 : (variant ? variant.harga_online : product.harga_online),
+                harga_offline: isBonus ? 0 : (variant ? variant.harga_offline : product.harga_offline),
+                gambar_utama: variant && variant.gambar ? variant.gambar : product.gambar_utama,
+                isBonus: isBonus // Flag Bonus
             }]);
         }
         setShowVariantModal(false);
+        setShowBonusModal(false); // Tutup modal bonus jika ada
     };
 
     const updateQty = (cartItemId, delta) => {
@@ -116,21 +142,42 @@ export default function Create({ auth, products, toko }) {
     const subtotal = useMemo(() => cart.reduce((acc, item) => acc + ((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty), 0), [cart, channel]);
     const grandTotal = Math.max(0, subtotal - discount);
 
-    useEffect(() => { if (paymentMethod !== 'cash') setCustomerMoney(grandTotal); }, [grandTotal, paymentMethod]);
+    useEffect(() => {
+        if (paymentMethod !== 'cash' && paymentMethod !== 'split') {
+            setCustomerMoney(grandTotal);
+        }
+    }, [grandTotal, paymentMethod]);
 
-    const change = useMemo(() => (paymentMethod === 'cash' && customerMoney >= grandTotal ? customerMoney - grandTotal : 0), [customerMoney, grandTotal, paymentMethod]);
+    const splitTotalPaid = useMemo(() => splitPayments.reduce((acc, curr) => acc + (curr.nominal || 0), 0), [splitPayments]);
+    const remainingSplit = Math.max(0, grandTotal - splitTotalPaid);
+
+    const change = useMemo(() => {
+        if (paymentMethod === 'cash') {
+            return customerMoney >= grandTotal ? customerMoney - grandTotal : 0;
+        }
+        if (paymentMethod === 'split') {
+            return splitTotalPaid >= grandTotal ? splitTotalPaid - grandTotal : 0;
+        }
+        return 0;
+    }, [customerMoney, grandTotal, paymentMethod, splitTotalPaid]);
+
     const quickAmounts = [50000, 100000, 200000, 500000];
 
     // --- TRANSAKSI ---
     const handleFinalize = async () => {
         if (cart.length === 0) return showAlert('Keranjang kosong', 'error');
         setIsProcessing(true);
+
         const payload = {
-            cart: cart.map(i => ({ id: i.id, variantId: i.variantId || null, qty: parseInt(i.qty) })),
-            channel: channel,
-            paymentMethod: paymentMethod,
-            discount: parseFloat(discount) || 0,
-            customerMoney: parseFloat(paymentMethod === 'cash' ? customerMoney : grandTotal) || 0
+            cart: cart.map(i => ({
+                id: i.id,
+                variantId: i.variantId || null,
+                qty: parseInt(i.qty),
+                is_bonus: i.isBonus || false // Kirim flag ke backend
+            })),
+            channel, paymentMethod, discount,
+            customerMoney: parseFloat(paymentMethod === 'cash' ? customerMoney : grandTotal),
+            payments: paymentMethod === 'split' ? splitPayments : []
         };
 
         try {
@@ -143,8 +190,7 @@ export default function Create({ auth, products, toko }) {
                 showAlert(response.data.message || 'Gagal', 'error');
             }
         } catch (error) {
-            console.error(error);
-            showAlert('Terjadi kesalahan sistem', 'error');
+            showAlert(error.response?.data?.message || 'Terjadi kesalahan sistem', 'error');
         } finally {
             setIsProcessing(false);
         }
@@ -152,11 +198,10 @@ export default function Create({ auth, products, toko }) {
 
     const resetTransaction = () => {
         setCart([]); setDiscount(0); setCustomerMoney(0); setShowReceipt(false); setIsCartExpanded(false); setChannel('offline'); setPaymentMethod('cash');
+        setSplitPayments([{ method: 'cash', nominal: 0 }, { method: 'debit', nominal: 0 }]);
     };
 
-    const handlePrint = () => {
-        window.print();
-    };
+    const handlePrint = () => window.print();
 
     return (
         <GeneralLayout>
@@ -166,9 +211,9 @@ export default function Create({ auth, products, toko }) {
                 #printable-receipt { display: none; }
                 @media print {
                     body * { visibility: hidden; height: 0; overflow: hidden; }
-                    body, html { margin: 0; padding: 0; height: 100%; width: 100%; background-color: white; overflow: visible !important; }
+                    body, html { margin: 0; padding: 0; background: white; overflow: visible !important; }
                     #printable-receipt, #printable-receipt * { visibility: visible; height: auto; overflow: visible; }
-                    #printable-receipt { display: block !important; position: absolute; left: 0; top: 0; width: 80mm; margin: 0; padding: 0; background-color: white; z-index: 99999; border: none; }
+                    #printable-receipt { display: block !important; position: absolute; left: 0; top: 0; width: 80mm; z-index: 99999; }
                     @page { size: 80mm auto; margin: 0; }
                     .no-print { display: none !important; }
                 }
@@ -176,8 +221,8 @@ export default function Create({ auth, products, toko }) {
             `}</style>
 
             {alertMessage && (
-                <div className={`fixed top-6 right-6 z-[100] animate-in slide-in-from-top duration-300 ${alertMessage.type === 'error' ? 'bg-black text-white border-l-4 border-red-500' : 'bg-black text-white border-l-4 border-green-500'} px-4 py-3 rounded shadow-2xl flex items-center gap-3 no-print`}>
-                    {alertMessage.type === 'error' ? <ExclamationCircleIcon className="w-5 h-5 text-red-500"/> : <CheckCircleIcon className="w-5 h-5 text-green-500"/>}
+                <div className={`fixed top-6 right-6 z-[100] animate-in slide-in-from-top duration-300 bg-black text-white border-l-4 ${alertMessage.type === 'error' ? 'border-red-500' : 'border-green-500'} px-4 py-3 rounded shadow-2xl flex items-center gap-3 no-print`}>
+                    {alertMessage.type === 'error' ? <ExclamationCircleIcon className="w-5 h-5 text-red-500" /> : <CheckCircleIcon className="w-5 h-5 text-green-500" />}
                     <span className="text-sm font-bold">{alertMessage.message}</span>
                 </div>
             )}
@@ -237,7 +282,7 @@ export default function Create({ auth, products, toko }) {
                 </div>
 
                 {/* --- KANAN: CART --- */}
-                <div className={`fixed lg:static bottom-[75px] lg:bottom-0 inset-x-0 z-30 lg:z-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.15)] lg:shadow-none ${isCartExpanded ? 'h-[calc(100dvh-150px)] rounded-t-2xl' : 'h-[80px] rounded-t-xl lg:h-full lg:w-[380px] xl:w-[420px] lg:rounded-none'}`}>
+                <div className={`fixed lg:static bottom-16 md:bottom-0 lg:bottom-0 inset-x-0 z-30 lg:z-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.15)] lg:shadow-none ${isCartExpanded ? 'h-[calc(100dvh-150px)] rounded-t-2xl' : 'h-[80px] rounded-t-xl lg:h-full lg:w-[380px] xl:w-[420px] lg:rounded-none'}`}>
                     <div className="w-full h-6 flex justify-center items-center lg:hidden cursor-pointer bg-white rounded-t-xl shrink-0" onClick={() => setIsCartExpanded(!isCartExpanded)}><div className="w-12 h-1.5 bg-gray-300 rounded-full"></div></div>
                     <div className="px-5 pb-2 lg:py-4 border-b border-gray-100 flex justify-between items-center cursor-pointer lg:cursor-default shrink-0" onClick={() => window.innerWidth < 1024 && setIsCartExpanded(!isCartExpanded)}>
                         <div className="flex items-center gap-3">
@@ -248,11 +293,21 @@ export default function Create({ auth, products, toko }) {
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900">Keranjang</h3>
                                 <p className="text-[10px] text-gray-500 lg:hidden">Total: <span className="font-bold text-gray-900">{formatRupiah(grandTotal)}</span></p>
-                                <p className="text-[10px] text-gray-500 hidden lg:block">Review pesanan</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            {cart.length > 0 && <button onClick={(e) => { e.stopPropagation(); if(confirm('Hapus semua?')) setCart([]); }} className="text-xs text-gray-400 hover:text-red-600 px-2 py-1 rounded font-medium hidden lg:block">Reset</button>}
+                            {cart.length > 0 && <button onClick={(e) => { e.stopPropagation(); if (confirm('Hapus semua?')) setCart([]); }} className="text-xs text-gray-400 hover:text-red-600 px-2 py-1 rounded font-medium hidden lg:block">Reset</button>}
+
+                            {/* Tombol Tambah Bonus */}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowBonusModal(true); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm active:scale-95"
+                                title="Tambah Bonus"
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                                <span>Bonus</span>
+                            </button>
+
                             <div className="lg:hidden text-gray-400">{isCartExpanded ? <ChevronDownIcon className="w-5 h-5" /> : <ChevronUpIcon className="w-5 h-5" />}</div>
                         </div>
                     </div>
@@ -273,7 +328,11 @@ export default function Create({ auth, products, toko }) {
                                         </div>
                                         <div className="flex items-center gap-2 mt-1">
                                             {item.variantName && <span className="text-[9px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{item.variantName}</span>}
-                                            <span className="text-[11px] text-gray-500">@ {formatRupiah(channel === 'online' ? item.harga_online : item.harga_offline)}</span>
+                                            {item.isBonus ? (
+                                                <span className="text-[9px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200">BONUS</span>
+                                            ) : (
+                                                <span className="text-[11px] text-gray-500">@ {formatRupiah(channel === 'online' ? item.harga_online : item.harga_offline)}</span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center h-8 bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -293,7 +352,13 @@ export default function Create({ auth, products, toko }) {
                                 <span>Diskon</span>
                                 <div className="flex items-center w-32 bg-white border border-gray-200 rounded-md px-2 h-7 focus-within:border-black transition-colors">
                                     <span className="text-gray-400 mr-1">-</span>
-                                    <input type="text" className="w-full border-none p-0 text-right text-xs font-bold text-red-500 focus:ring-0 placeholder-gray-300" placeholder="0" value={formatDisplay(discount)} onChange={(e) => setDiscount(parseRaw(e.target.value))} />
+                                    <input
+                                        type="text"
+                                        className="w-full border-none p-0 text-right text-xs font-bold text-red-500 focus:ring-0 placeholder-gray-300"
+                                        placeholder="0"
+                                        value={formatNumberWithDots(discount)}
+                                        onChange={handleNumberInput(setDiscount)}
+                                    />
                                 </div>
                             </div>
                             <div className="flex justify-between items-center pt-2 border-t border-gray-200">
@@ -305,12 +370,19 @@ export default function Create({ auth, products, toko }) {
                         <div className="space-y-3">
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">Rp</span>
-                                <input type="text" className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${paymentMethod === 'cash' ? 'bg-white border-gray-300 focus:ring-1 focus:ring-black text-gray-900' : 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'}`} placeholder="Uang diterima..." value={formatDisplay(customerMoney)} onChange={(e) => setCustomerMoney(parseRaw(e.target.value))} disabled={paymentMethod !== 'cash'} />
+                                <input
+                                    type="text"
+                                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${paymentMethod === 'cash' ? 'bg-white border-gray-300 focus:ring-1 focus:ring-black text-gray-900' : 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'}`}
+                                    placeholder="Uang diterima..."
+                                    value={formatNumberWithDots(customerMoney)}
+                                    onChange={handleNumberInput(setCustomerMoney)}
+                                    disabled={paymentMethod !== 'cash'}
+                                />
                             </div>
                             {paymentMethod === 'cash' && (
                                 <div className="flex gap-2 overflow-x-auto hide-scroll pb-1">
                                     {quickAmounts.map(amt => (
-                                        <button key={amt} onClick={() => setCustomerMoney(amt)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-black hover:text-black transition-all flex-shrink-0 active:scale-95">{amt/1000}k</button>
+                                        <button key={amt} onClick={() => setCustomerMoney(amt)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-black hover:text-black transition-all flex-shrink-0 active:scale-95">{amt / 1000}k</button>
                                     ))}
                                     <button onClick={() => setCustomerMoney(grandTotal)} className="px-3 py-1.5 bg-gray-200 border border-transparent rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-300 transition-all flex-shrink-0 active:scale-95">Pas</button>
                                 </div>
@@ -318,7 +390,7 @@ export default function Create({ auth, products, toko }) {
                         </div>
 
                         <div className="grid grid-cols-3 gap-2 mt-3">
-                            {[{id:'cash',l:'Cash',i:BanknotesIcon}, {id:'debit',l:'Debit',i:CreditCardIcon}, {id:'qr',l:'QRIS',i:DevicePhoneMobileIcon}].map(m => (
+                            {[{ id: 'cash', l: 'Cash', i: BanknotesIcon }, { id: 'debit', l: 'Debit', i: CreditCardIcon }, { id: 'qr', l: 'QRIS', i: DevicePhoneMobileIcon }, { id: 'split', l: 'Split', i: CubeIcon }].map(m => (
                                 <button key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex flex-col items-center justify-center py-2.5 rounded-lg border transition-all ${paymentMethod === m.id ? 'bg-black text-white border-black shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                                     <m.i className="w-4 h-4 mb-1" />
                                     <span className="text-[10px] font-bold uppercase">{m.l}</span>
@@ -326,39 +398,192 @@ export default function Create({ auth, products, toko }) {
                             ))}
                         </div>
 
+                        {paymentMethod === 'split' && (
+                            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="text-xs font-bold text-gray-900">Rincian Pembayaran</h4>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${remainingSplit === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        Sisa: {formatRupiah(remainingSplit)}
+                                    </span>
+                                </div>
+                                {splitPayments.map((p, idx) => (
+                                    <div key={idx} className="flex gap-2">
+                                        <select
+                                            value={p.method}
+                                            onChange={(e) => {
+                                                const newSplit = [...splitPayments];
+                                                newSplit[idx].method = e.target.value;
+                                                setSplitPayments(newSplit);
+                                            }}
+                                            className="text-xs border-gray-300 rounded-lg focus:ring-black focus:border-black py-1.5"
+                                        >
+                                            <option value="cash">Cash</option>
+                                            <option value="debit">Debit</option>
+                                            <option value="qr">QRIS</option>
+                                        </select>
+                                        <div className="flex-1 relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">Rp</span>
+                                            <input
+                                                type="text"
+                                                className="w-full pl-9 pr-2 py-1.5 text-xs font-bold border-gray-300 rounded-lg focus:ring-black focus:border-black"
+                                                placeholder="Nominal..."
+                                                value={formatNumberWithDots(p.nominal)}
+                                                onChange={(e) => {
+                                                    const rawValue = Number(e.target.value.replace(/\D/g, ''));
+                                                    const newSplit = [...splitPayments];
+                                                    newSplit[idx].nominal = rawValue;
+                                                    setSplitPayments(newSplit);
+                                                }}
+                                            />
+                                        </div>
+                                        {splitPayments.length > 2 && (
+                                            <button onClick={() => setSplitPayments(splitPayments.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                {/* Tombol tambah pembayaran jika diperlukan, tapi user minta 2 */}
+                            </div>
+                        )}
+
                         {paymentMethod === 'cash' && (<div className="flex justify-between items-center mt-3 text-xs"><span className="text-gray-500">Kembalian</span><span className={`font-bold ${change >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatRupiah(change)}</span></div>)}
 
-                        <button disabled={cart.length === 0 || (paymentMethod === 'cash' && customerMoney < grandTotal) || isProcessing} onClick={handleFinalize} className="w-full mt-4 py-3.5 bg-black text-white rounded-xl text-sm font-bold shadow-lg shadow-gray-400/30 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+                        <button disabled={cart.length === 0 || (paymentMethod === 'cash' && customerMoney < grandTotal) || (paymentMethod === 'split' && splitTotalPaid < grandTotal) || isProcessing} onClick={handleFinalize} className="w-full mt-4 py-3.5 bg-black text-white rounded-xl text-sm font-bold shadow-lg hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
                             {isProcessing ? 'Memproses...' : <><PrinterIcon className="w-4 h-4" /> Proses & Cetak</>}
                         </button>
                     </div>
                 </div>
             </div>
 
+            {/* --- MODAL BONUS --- */}
+            {showBonusModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 no-print">
+                    <div className="bg-white w-full max-w-lg rounded-2xl p-6 shadow-xl relative flex flex-col max-h-[85vh]">
+                        <button onClick={() => setShowBonusModal(false)} className="absolute top-4 right-4 p-1 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500"><XMarkIcon className="w-5 h-5" /></button>
+
+                        <div className="mb-4">
+                            <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                                <CubeIcon className="w-6 h-6 text-indigo-600" /> Tambah Bonus
+                            </h3>
+                            <p className="text-xs text-gray-500">Item bonus harganya Rp 0 tapi tetap mengurangi stok.</p>
+                        </div>
+
+                        {/* Search Bonus */}
+                        <div className="mb-4">
+                            <input
+                                type="text"
+                                placeholder="Cari barang bonus..."
+                                className="w-full bg-gray-50 border-gray-200 rounded-xl text-sm py-2.5 px-4 focus:ring-black focus:border-black"
+                                value={bonusSearch}
+                                onChange={(e) => setBonusSearch(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-2 hide-scroll pr-1">
+                            {products.filter(p => p.nama_produk.toLowerCase().includes(bonusSearch.toLowerCase())).map(p => {
+                                const isExpanded = expandedBonusId === p.id;
+                                return (
+                                    <div key={p.id} className={`border border-gray-100 rounded-xl overflow-hidden transition-all ${isExpanded ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white hover:border-indigo-300'}`}>
+                                        {/* Product Header - Clickable */}
+                                        <div
+                                            onClick={() => {
+                                                if (p.is_variant) {
+                                                    setExpandedBonusId(isExpanded ? null : p.id);
+                                                } else {
+                                                    if (p.stok > 0) addToCart(p, null, true);
+                                                }
+                                            }}
+                                            className={`p-3 flex gap-3 items-center cursor-pointer ${p.stok <= 0 && !p.is_variant ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <div className="w-10 h-10 bg-gray-50 rounded-lg shrink-0 flex items-center justify-center overflow-hidden border border-gray-200">
+                                                {p.gambar_utama ? <img src={`/storage/${p.gambar_utama}`} className="w-full h-full object-cover" /> : <PhotoIcon className="w-5 h-5 text-gray-300" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-gray-900 truncate">{p.nama_produk}</p>
+                                                <div className="flex items-center gap-2">
+                                                    {!p.is_variant && <p className="text-[10px] text-gray-500">{p.stok} stok</p>}
+                                                    {!!p.is_variant && <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 rounded border border-gray-200">Varian</span>}
+                                                </div>
+                                            </div>
+                                            {/* Action Icon */}
+                                            <div>
+                                                {p.is_variant ? (
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                ) : (
+                                                    <PlusIcon className="w-5 h-5 text-indigo-600" />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Variants Expansion */}
+                                        {!!p.is_variant && isExpanded && (
+                                            <div className="bg-gray-50 border-t border-indigo-100 p-3 space-y-3 animate-in slide-in-from-top-1 duration-200">
+                                                {p.variants.map(v => (
+                                                    <div
+                                                        key={v.id}
+                                                        className={`w-full flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-200 shadow-sm transition-all group ${v.stok > 0 ? 'hover:border-indigo-300' : 'opacity-60 grayscale'}`}
+                                                    >
+                                                        {/* Image Thumbnail */}
+                                                        <div className="w-12 h-12 bg-gray-50 rounded-lg shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">
+                                                            {v.gambar ? <img src={v.gambar.startsWith('http') ? v.gambar : `/storage/${v.gambar}`} className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-gray-400">{v.name.charAt(0)}</span>}
+                                                        </div>
+
+                                                        {/* Details */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-bold text-gray-900 truncate">{v.name}</p>
+                                                            <p className={`text-[10px] font-medium ${v.stok > 0 ? 'text-gray-500' : 'text-red-500'}`}>
+                                                                {v.stok > 0 ? `Stok: ${v.stok}` : 'Habis'}
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Price & Action */}
+                                                        <div className="text-right flex flex-col items-end gap-1">
+                                                            <span className="text-xs font-bold text-gray-900">{formatRupiah(channel === 'online' ? v.harga_online : v.harga_offline)}</span>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); addToCart(p, v, true); }}
+                                                                disabled={v.stok <= 0}
+                                                                className="p-1.5 rounded-lg bg-gray-100 hover:bg-indigo-600 hover:text-white text-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group-hover:bg-indigo-50 group-hover:text-indigo-600"
+                                                            >
+                                                                <PlusIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {products.filter(p => p.nama_produk.toLowerCase().includes(bonusSearch.toLowerCase())).length === 0 && (
+                                <p className="text-center text-gray-400 text-xs py-10">Produk tidak ditemukan</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* --- MODAL VARIAN --- */}
             {showVariantModal && selectedProduct && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 no-print">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 no-print">
                     <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl relative">
-                        <button onClick={() => setShowVariantModal(false)} className="absolute top-4 right-4 p-1 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500"><XMarkIcon className="w-5 h-5"/></button>
+                        <button onClick={() => setShowVariantModal(false)} className="absolute top-4 right-4 p-1 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500"><XMarkIcon className="w-5 h-5" /></button>
                         <h3 className="font-bold text-lg text-gray-900 mb-1 pr-8">{selectedProduct.nama_produk}</h3>
                         <p className="text-xs text-gray-500 mb-4">Pilih varian:</p>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto hide-scroll">
                             {selectedProduct.variants.map(v => (
-                                <button key={v.id} onClick={() => addToCart(selectedProduct, v)} disabled={v.stok <= 0} className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-black transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 bg-white">
+                                <button key={v.id} onClick={() => addToCart(selectedProduct, v)} disabled={v.stok <= 0} className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-black transition-all group disabled:opacity-50 disabled:cursor-not-allowed bg-white">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
-                                            {/* Fix Variant Image Display */}
-                                            {v.gambar && !imageErrors[`variant-${v.id}`] ? (
-                                                <img 
-                                                    src={v.gambar.startsWith('http') ? v.gambar : `/storage/${v.gambar}`} 
-                                                    className="w-full h-full object-cover" 
-                                                    onError={() => setImageErrors(prev => ({ ...prev, [`variant-${v.id}`]: true }))}
+                                            {v.gambar || selectedProduct.gambar_utama ? (
+                                                <img
+                                                    src={(v.gambar || selectedProduct.gambar_utama).startsWith('http') ? (v.gambar || selectedProduct.gambar_utama) : `/storage/${v.gambar || selectedProduct.gambar_utama}`}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
                                                 />
-                                            ) : (
-                                                <div className="flex items-center justify-center w-full h-full bg-gray-50">
-                                                    <span className="text-xs font-bold text-gray-400">{v.name.charAt(0)}</span>
-                                                </div>
-                                            )}
+                                            ) : null}
+                                            <span className="text-xs font-bold text-gray-400" tyle={{ display: (v.gambar || selectedProduct.gambar_utama) ? 'none' : 'block' }}>{v.name.charAt(0)}</span>
                                         </div>
                                         <div className="text-left">
                                             <span className="block text-sm font-bold text-gray-800 group-hover:text-black">{v.name}</span>
@@ -386,47 +611,55 @@ export default function Create({ auth, products, toko }) {
                                 <h2 className="font-bold text-lg text-gray-900 uppercase leading-tight">{toko?.nama_toko || auth.user.name}</h2>
                                 {toko?.cabang && <p className="text-xs font-semibold text-gray-600 mt-0.5 uppercase">{toko.cabang}</p>}
                                 <div className="text-[10px] text-gray-500 mt-2 space-y-0.5">
-                                    <p className="flex items-center justify-center gap-1 leading-tight">{toko?.alamat || 'Alamat Belum Diatur'}</p>
-                                    <p className="flex items-center justify-center gap-1 font-mono">No. Telp {toko?.no_hp || '-'}</p>
+                                    <p>{toko?.alamat || 'Alamat Belum Diatur'}</p>
+                                    <p className="font-mono">No. Telp {toko?.no_hp || '-'}</p>
                                 </div>
                             </div>
                             <div className="border-t border-b border-dashed border-gray-300 py-3 mb-4 space-y-1 text-[10px] text-gray-600 font-mono">
-                                <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900 uppercase">{transactionCode}</span></div>
-                                <div className="flex justify-between"><span>TANGGAL</span><span>{new Date().toLocaleDateString('id-ID')} {new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span></div>
-                                <div className="flex justify-between"><span>KASIR</span><span className="uppercase">{auth.user.name}</span></div>
+                                <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900">{transactionCode}</span></div>
+                                <div className="flex justify-between"><span>TANGGAL</span><span>{new Date().toLocaleDateString('id-ID')}</span></div>
                                 <div className="flex justify-between"><span>METODE</span><span className="uppercase font-bold">{paymentMethod}</span></div>
                             </div>
                             <div className="space-y-3 mb-6">
                                 {cart.map(item => (
                                     <div key={item.cartItemId} className="text-xs font-mono border-b border-gray-50 pb-2 last:border-0">
                                         <div className="flex justify-between font-bold text-gray-900">
-                                            <span>{item.nama_produk} {item.variantName ? `(${item.variantName})` : ''}</span>
+                                            <span>{item.nama_produk} {item.variantName ? `(${item.variantName})` : ''} {item.isBonus && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1 rounded ml-1">BONUS</span>}</span>
                                         </div>
                                         <div className="flex justify-between text-gray-500 mt-0.5">
-                                            <span>{item.qty} x {formatRupiah(channel === 'online' ? item.harga_online : item.harga_offline)}</span>
-                                            <span className="text-gray-900 font-bold">{formatRupiah((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty)}</span>
+                                            <span>
+                                                {item.qty} x {formatRupiah(item.isBonus ? 0 : (channel === 'online' ? item.harga_online : item.harga_offline))}
+                                            </span>
+                                            <span className="text-gray-900 font-bold">
+                                                {formatRupiah(item.isBonus ? 0 : ((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty))}
+                                            </span>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                             <div className="border-t border-gray-300 pt-3 space-y-1 text-xs font-mono">
-                                <div className="flex justify-between text-gray-600"><span>SUBTOTAL</span><span>{formatRupiah(subtotal)}</span></div>
+                                <div className="flex justify-between"><span>SUBTOTAL</span><span>{formatRupiah(subtotal)}</span></div>
                                 {discount > 0 && <div className="flex justify-between text-red-600"><span>DISKON</span><span>-{formatRupiah(discount)}</span></div>}
                                 <div className="flex justify-between font-bold text-sm text-gray-900 pt-2 border-t border-dashed border-gray-300 mt-2">
-                                    <span>TOTAL</span>
-                                    <span className="text-base">{formatRupiah(grandTotal)}</span>
+                                    <span>TOTAL</span><span>{formatRupiah(grandTotal)}</span>
                                 </div>
-                                <div className="flex justify-between text-gray-600 pt-1"><span>BAYAR</span><span>{formatRupiah(customerMoney)}</span></div>
-                                <div className="flex justify-between text-gray-900 font-bold"><span>KEMBALI</span><span>{formatRupiah(change)}</span></div>
-                            </div>
-                            <div className="text-center mt-8 space-y-1">
-                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">*** TERIMA KASIH ***</p>
-                                <p className="text-[8px] text-gray-400">Barang yang dibeli tidak dapat ditukar</p>
+                                {paymentMethod === 'split' ? (
+                                    <>
+                                        {splitPayments.map((p, i) => p.nominal > 0 && (
+                                            <div key={i} className="flex justify-between text-gray-600 uppercase">
+                                                <span>{p.method}</span><span>{formatRupiah(p.nominal)}</span>
+                                            </div>
+                                        ))}
+                                    </>
+                                ) : (
+                                    <div className="flex justify-between"><span>BAYAR</span><span>{formatRupiah(customerMoney)}</span></div>
+                                )}
+                                <div className="flex justify-between font-bold"><span>KEMBALI</span><span>{formatRupiah(change)}</span></div>
                             </div>
                         </div>
                         <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3">
                             <button onClick={resetTransaction} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-white transition-colors">Tutup</button>
-                            <button onClick={handlePrint} className="flex-1 py-2.5 rounded-xl bg-black text-white font-bold text-xs hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"><PrinterIcon className="w-4 h-4"/> Cetak</button>
+                            <button onClick={handlePrint} className="flex-1 py-2.5 rounded-xl bg-black text-white font-bold text-xs hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"><PrinterIcon className="w-4 h-4" /> Cetak</button>
                         </div>
                     </div>
                 </div>
@@ -437,47 +670,39 @@ export default function Create({ auth, products, toko }) {
                 <div id="printable-receipt">
                     <div className="p-2">
                         <div className="text-center mb-6">
-                            <img src="/images/logo-houston.png" alt="Logo Houston" className="h-16 w-auto mx-auto mb-3 object-contain" />
-                            <h2 className="font-bold text-lg text-gray-900 uppercase leading-tight">{toko?.nama_toko || auth.user.name}</h2>
-                            {toko?.cabang && <p className="text-xs font-semibold text-gray-600 mt-0.5 uppercase">{toko.cabang}</p>}
-                            <div className="text-[10px] text-gray-500 mt-2 space-y-0.5">
-                                <p className="flex items-center justify-center gap-1 leading-tight">{toko?.alamat || 'Alamat Belum Diatur'}</p>
-                                <p className="flex items-center justify-center gap-1 font-mono">No. Telp {toko?.no_hp || '-'}</p>
-                            </div>
+                            <img src="/images/logo-houston.png" alt="Logo" className="h-16 mx-auto mb-3" />
+                            <h2 className="font-bold text-lg uppercase">{toko?.nama_toko || auth.user.name}</h2>
+                            <p className="text-[10px]">{toko?.alamat}</p>
                         </div>
-                        <div className="border-t border-b border-dashed border-gray-300 py-3 mb-4 space-y-1 text-[10px] text-gray-600 font-mono">
-                            <div className="flex justify-between"><span>NO. TRX</span><span className="font-bold text-gray-900 uppercase">{transactionCode}</span></div>
-                            <div className="flex justify-between"><span>TANGGAL</span><span>{new Date().toLocaleDateString('id-ID')} {new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span></div>
-                            <div className="flex justify-between"><span>KASIR</span><span className="uppercase">{auth.user.name}</span></div>
-                            <div className="flex justify-between"><span>METODE</span><span className="uppercase font-bold">{paymentMethod}</span></div>
+                        <div className="border-t border-b border-dashed py-2 mb-4 text-[10px] font-mono">
+                            <div className="flex justify-between"><span>TRX:</span><span>{transactionCode}</span></div>
+                            <div className="flex justify-between"><span>DATE:</span><span>{new Date().toLocaleString()}</span></div>
                         </div>
-                        <div className="space-y-3 mb-6">
-                            {cart.map(item => (
-                                <div key={item.cartItemId} className="text-xs font-mono border-b border-gray-50 pb-2 last:border-0">
-                                    <div className="flex justify-between font-bold text-gray-900">
-                                        <span>{item.nama_produk} {item.variantName ? `(${item.variantName})` : ''}</span>
-                                    </div>
-                                    <div className="flex justify-between text-gray-500 mt-0.5">
-                                        <span>{item.qty} x {formatRupiah(channel === 'online' ? item.harga_online : item.harga_offline)}</span>
-                                        <span className="text-gray-900 font-bold">{formatRupiah((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty)}</span>
-                                    </div>
+                        {cart.map(item => (
+                            <div key={item.cartItemId} className="text-[10px] font-mono mb-2">
+                                <p>{item.nama_produk} {item.variantName ? `(${item.variantName})` : ''} {item.isBonus && ' [BONUS]'}</p>
+                                <div className="flex justify-between">
+                                    <span>{item.qty} x {formatNumberWithDots(item.isBonus ? 0 : (channel === 'online' ? item.harga_online : item.harga_offline))}</span>
+                                    <span>{formatNumberWithDots(item.isBonus ? 0 : ((channel === 'online' ? item.harga_online : item.harga_offline) * item.qty))}</span>
                                 </div>
-                            ))}
-                        </div>
-                        <div className="border-t border-gray-300 pt-3 space-y-1 text-xs font-mono">
-                            <div className="flex justify-between text-gray-600"><span>SUBTOTAL</span><span>{formatRupiah(subtotal)}</span></div>
-                            {discount > 0 && <div className="flex justify-between text-red-600"><span>DISKON</span><span>-{formatRupiah(discount)}</span></div>}
-                            <div className="flex justify-between font-bold text-sm text-gray-900 pt-2 border-t border-dashed border-gray-300 mt-2">
-                                <span>TOTAL</span>
-                                <span className="text-base">{formatRupiah(grandTotal)}</span>
                             </div>
-                            <div className="flex justify-between text-gray-600 pt-1"><span>BAYAR</span><span>{formatRupiah(customerMoney)}</span></div>
-                            <div className="flex justify-between text-gray-900 font-bold"><span>KEMBALI</span><span>{formatRupiah(change)}</span></div>
+                        ))}
+                        <div className="border-t border-dashed pt-2 text-[10px] font-mono">
+                            <div className="flex justify-between font-bold"><span>TOTAL:</span><span>{formatRupiah(grandTotal)}</span></div>
+                            {paymentMethod === 'split' ? (
+                                <>
+                                    {splitPayments.map((p, i) => p.nominal > 0 && (
+                                        <div key={i} className="flex justify-between uppercase">
+                                            <span>{p.method}:</span><span>{formatRupiah(p.nominal)}</span>
+                                        </div>
+                                    ))}
+                                </>
+                            ) : (
+                                <div className="flex justify-between"><span>CASH:</span><span>{formatRupiah(customerMoney)}</span></div>
+                            )}
+                            <div className="flex justify-between"><span>CHANGE:</span><span>{formatRupiah(change)}</span></div>
                         </div>
-                        <div className="text-center mt-8 space-y-1">
-                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">*** TERIMA KASIH ***</p>
-                            <p className="text-[8px] text-gray-400">Barang yang dibeli tidak dapat ditukar</p>
-                        </div>
+                        <p className="text-center text-[10px] mt-6">*** TERIMA KASIH ***</p>
                     </div>
                 </div>
             )}

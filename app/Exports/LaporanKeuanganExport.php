@@ -40,8 +40,8 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
         $period = CarbonPeriod::create($this->startDate, $this->endDate);
         $data = [];
 
-        // Eager load detail.produk supaya hemat query
-        $transactions = Transaksi::with(['detail.produk'])
+        // Eager load detail.produk dan pembayaran supaya hemat query
+        $transactions = Transaksi::with(['detail.produk', 'pembayaran'])
             ->where('toko_id', $this->tokoId)
             ->whereDate('tanggal', '>=', $this->startDate)
             ->whereDate('tanggal', '<=', $this->endDate)
@@ -113,13 +113,34 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
             $row[] = '';
             $row[] = $currentDate;
 
-            // Cash & Non Cash
-            $cash = $dailyTrx->where('metode_pembayaran', 'cash')->sum('grand_total');
-            $nonCash = $dailyTrx->whereIn('metode_pembayaran', ['debit', 'qr'])->sum('grand_total');
+            // Cash & Non Cash Calculation
+            $dailyCash = 0;
+            $dailyNonCash = 0;
 
-            $row[] = $cash;
-            $row[] = $nonCash;
-            $row[] = $cash + $nonCash;
+            foreach ($dailyTrx as $trx) {
+                // Gunakan data pembayaran detail jika ada (untuk split & single baru)
+                if ($trx->pembayaran && $trx->pembayaran->count() > 0) {
+                    foreach ($trx->pembayaran as $p) {
+                        if ($p->metode_pembayaran === 'cash') {
+                            $dailyCash += $p->nominal;
+                        } else {
+                            // debit, qr, dll dianggap non-cash
+                            $dailyNonCash += $p->nominal;
+                        }
+                    }
+                } else {
+                    // Fallback untuk data lama atau jika pembayaran kosong
+                    if ($trx->metode_pembayaran === 'cash') {
+                        $dailyCash += $trx->grand_total;
+                    } else {
+                        $dailyNonCash += $trx->grand_total;
+                    }
+                }
+            }
+
+            $row[] = $dailyCash;
+            $row[] = $dailyNonCash;
+            $row[] = $dailyCash + $dailyNonCash;
 
             $data[] = $row;
         }
