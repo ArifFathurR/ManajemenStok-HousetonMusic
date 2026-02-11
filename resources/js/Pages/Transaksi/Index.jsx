@@ -14,9 +14,12 @@ import {
     BuildingStorefrontIcon,
     GlobeAsiaAustraliaIcon,
     DocumentArrowDownIcon,
-    PrinterIcon
+    PrinterIcon,
+    PencilSquareIcon,
+    TrashIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 // Helper Format Rupiah
 const formatRupiah = (number) => {
@@ -100,6 +103,27 @@ export default function Index({ transaksi, stats, filters, toko }) {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleDelete = (id) => {
+        Swal.fire({
+            title: 'Apakah Anda yakin?',
+            text: "Transaksi yang dihapus akan mengembalikan stok produk!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#000000',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Ya, hapus!',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.delete(route('transaksi.destroy', id), {
+                    preserveScroll: true,
+                    onSuccess: () => Swal.fire('Terhapus!', 'Transaksi berhasil dihapus.', 'success'),
+                    onError: () => Swal.fire('Gagal!', 'Terjadi kesalahan saat menghapus.', 'error')
+                });
+            }
+        });
     };
 
     return (
@@ -350,7 +374,11 @@ export default function Index({ transaksi, stats, filters, toko }) {
                                                 <td className="px-6 py-4"><PaymentBadge method={item.metode_pembayaran} /></td>
                                                 <td className="px-6 py-4 text-right"><span className="font-black text-gray-900">{formatRupiah(item.grand_total)}</span></td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <button onClick={() => handleViewDetail(item)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><EyeIcon className="w-5 h-5" /></button>
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button onClick={() => handleViewDetail(item)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Lihat Detail"><EyeIcon className="w-5 h-5" /></button>
+                                                        <button onClick={() => router.get(route('transaksi.edit', item.id))} className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all" title="Edit Transaksi"><PencilSquareIcon className="w-5 h-5" /></button>
+                                                        <button onClick={() => handleDelete(item.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Hapus Transaksi"><TrashIcon className="w-5 h-5" /></button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -361,7 +389,7 @@ export default function Index({ transaksi, stats, filters, toko }) {
                             {/* --- MOBILE CARD LIST --- */}
                             <div className="md:hidden divide-y divide-gray-100">
                                 {transaksi.data.map((item) => (
-                                    <div key={item.id} className="p-4 active:bg-gray-50 transition-colors cursor-pointer" onClick={() => handleViewDetail(item)}>
+                                    <div key={item.id} className="p-4 active:bg-gray-50 transition-colors cursor-pointer group" onClick={() => handleViewDetail(item)}>
                                         <div className="flex justify-between items-start mb-3">
                                             <div className="flex gap-3">
                                                 <div className={`w-1.5 self-stretch rounded-full ${item.channel === 'online' ? 'bg-blue-500' : 'bg-gray-800'}`}></div>
@@ -378,8 +406,26 @@ export default function Index({ transaksi, stats, filters, toko }) {
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-center border-t border-gray-50 pt-3 pl-4">
-                                            <div className="flex items-center gap-1 text-xs text-gray-500"><span>Kasir:</span><span className="font-medium text-gray-700">{item.user?.name || '-'}</span></div>
-                                            <PaymentBadge method={item.metode_pembayaran} />
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-1 text-xs text-gray-500"><span>Kasir:</span><span className="font-medium text-gray-700">{item.user?.name || '-'}</span></div>
+                                                <PaymentBadge method={item.metode_pembayaran} />
+                                            </div>
+
+                                            {/* Mobile Actions */}
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); router.get(route('transaksi.edit', item.id)); }}
+                                                    className="p-2 text-white bg-orange-500 rounded-lg shadow-sm active:scale-95"
+                                                >
+                                                    <PencilSquareIcon className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                                                    className="p-2 text-white bg-red-500 rounded-lg shadow-sm active:scale-95"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
