@@ -9,11 +9,13 @@ import {
     PencilSquareIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
+import Select from 'react-select';
 
-export default function Edit({ auth, products, toko, transaksi }) {
+export default function Edit({ auth, products, toko, transaksi, kategoris }) {
     // --- STATE ---
     const [cart, setCart] = useState([]);
     const [search, setSearch] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState(null);
     const [channel, setChannel] = useState('offline');
     const [paymentMethod, setPaymentMethod] = useState('cash');
 
@@ -58,9 +60,17 @@ export default function Edit({ auth, products, toko, transaksi }) {
 
                 let matchedVariant = null;
                 if (product.is_variant && product.variants) {
-                    matchedVariant = product.variants.find(v =>
-                        (transaksi.channel === 'online' ? v.harga_online : v.harga_offline) == d.harga_satuan
-                    ) || product.variants[0];
+                    // 1. Try match by ID (New Feature)
+                    if (d.varian_id) {
+                        matchedVariant = product.variants.find(v => v.id === d.varian_id);
+                    }
+
+                    // 2. Fallback match by Price (Old Data)
+                    if (!matchedVariant) {
+                        matchedVariant = product.variants.find(v =>
+                            (transaksi.channel === 'online' ? v.harga_online : v.harga_offline) == d.harga_satuan
+                        ) || product.variants[0];
+                    }
                 }
 
                 const cartItemId = matchedVariant
@@ -120,10 +130,14 @@ export default function Edit({ auth, products, toko, transaksi }) {
 
     const handleImageError = (productId) => setImageErrors(prev => ({ ...prev, [productId]: true }));
 
-    const filteredProducts = products.filter(p =>
-        p.nama_produk.toLowerCase().includes(search.toLowerCase()) ||
-        (p.kategori && p.kategori.toLowerCase().includes(search.toLowerCase()))
-    );
+    const filteredProducts = products.filter(p => {
+        const matchesSearch = p.nama_produk.toLowerCase().includes(search.toLowerCase()) ||
+            (p.kategori && p.kategori.toLowerCase().includes(search.toLowerCase()));
+
+        const matchesCategory = selectedCategory ? p.kategori === selectedCategory.label : true;
+
+        return matchesSearch && matchesCategory;
+    });
 
     // --- CART ACTIONS ---
     const handleProductClick = (product) => {
@@ -311,10 +325,60 @@ export default function Edit({ auth, products, toko, transaksi }) {
 
                 {/* --- KIRI: KATALOG --- */}
                 <div className="flex-1 flex flex-col h-full border-r border-gray-200">
-                    <div className="px-5 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white z-0 relative">
+                    <div className="px-5 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white z-30 relative">
                         <div className="flex bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
                             <button onClick={() => setChannel('offline')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${channel === 'offline' ? 'bg-black text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>TOKO</button>
                             <button onClick={() => setChannel('online')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${channel === 'online' ? 'bg-black text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>ONLINE</button>
+                        </div>
+
+                        {/* Category Filter Dropdown */}
+                        <div className="w-full sm:w-64">
+                            <Select
+                                options={kategoris?.map(k => ({ value: k.id, label: k.nama_kategori })) || []}
+                                value={selectedCategory}
+                                onChange={setSelectedCategory}
+                                isClearable
+                                placeholder="Semua Kategori"
+                                className="text-sm font-medium"
+                                styles={{
+                                    control: (base, state) => ({
+                                        ...base,
+                                        borderRadius: '0.5rem',
+                                        borderColor: state.isFocused ? '#d1d5db' : 'transparent',
+                                        backgroundColor: state.isFocused ? '#fff' : '#f9fafb',
+                                        boxShadow: 'none',
+                                        minHeight: '42px',
+                                        transition: 'all 0.2s',
+                                        '&:hover': { borderColor: '#d1d5db' }
+                                    }),
+                                    menu: (base) => ({
+                                        ...base,
+                                        zIndex: 9999,
+                                        borderRadius: '0.5rem',
+                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                        border: '1px solid #f3f4f6'
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        backgroundColor: state.isSelected ? '#000' : (state.isFocused ? '#f3f4f6' : 'white'),
+                                        color: state.isSelected ? 'white' : '#1f2937',
+                                        fontSize: '0.875rem',
+                                        cursor: 'pointer',
+                                        padding: '10px 12px'
+                                    }),
+                                    placeholder: (base) => ({
+                                        ...base,
+                                        color: '#9ca3af',
+                                        fontSize: '0.875rem'
+                                    }),
+                                    singleValue: (base) => ({
+                                        ...base,
+                                        color: '#1f2937',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 500
+                                    })
+                                }}
+                            />
                         </div>
                         <div className="relative w-full sm:w-64 group">
                             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-900 transition-colors" />

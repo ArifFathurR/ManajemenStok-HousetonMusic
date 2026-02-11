@@ -9,13 +9,15 @@ import {
     BuildingStorefrontIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
+import Select from 'react-select';
 
-export default function Create({ auth, products, toko }) {
+export default function Create({ auth, products, toko, kategoris }) {
     const { props } = usePage();
 
     // --- STATE ---
     const [cart, setCart] = useState([]);
     const [search, setSearch] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState(null); // Change to null for Select
     const [channel, setChannel] = useState('offline');
     const [paymentMethod, setPaymentMethod] = useState('cash');
 
@@ -62,10 +64,15 @@ export default function Create({ auth, products, toko }) {
     // --- LOGIC ---
     const handleImageError = (productId) => setImageErrors(prev => ({ ...prev, [productId]: true }));
 
-    const filteredProducts = products.filter(p =>
-        p.nama_produk.toLowerCase().includes(search.toLowerCase()) ||
-        (p.kategori && p.kategori.toLowerCase().includes(search.toLowerCase()))
-    );
+    const filteredProducts = products.filter(p => {
+        const matchesSearch = p.nama_produk.toLowerCase().includes(search.toLowerCase()) ||
+            (p.kategori && p.kategori.toLowerCase().includes(search.toLowerCase()));
+
+        // Match category name (label)
+        const matchesCategory = selectedCategory ? p.kategori === selectedCategory.label : true;
+
+        return matchesSearch && matchesCategory;
+    });
 
     const showAlert = (message, type = 'info') => {
         setAlertMessage({ message, type });
@@ -231,14 +238,70 @@ export default function Create({ auth, products, toko }) {
 
                 {/* --- KIRI: KATALOG --- */}
                 <div className="flex-1 flex flex-col h-full border-r border-gray-200">
-                    <div className="px-5 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white z-0 relative">
-                        <div className="flex bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
+                    <div className="px-5 py-3 border-b border-gray-100 bg-white z-30 relative space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
+                        {/* Channel Filter (Left) */}
+                        <div className="flex bg-gray-100 rounded-lg p-1 w-full sm:w-auto shrink-0">
                             <button onClick={() => setChannel('offline')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${channel === 'offline' ? 'bg-black text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>TOKO</button>
                             <button onClick={() => setChannel('online')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${channel === 'online' ? 'bg-black text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>ONLINE</button>
                         </div>
-                        <div className="relative w-full sm:w-64 group">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-900 transition-colors" />
-                            <input type="text" placeholder="Cari produk..." className="w-full bg-gray-50 border-transparent focus:border-gray-300 focus:bg-white focus:ring-0 rounded-lg py-2 pl-9 pr-4 text-sm transition-all placeholder-gray-400 font-medium" value={search} onChange={(e) => setSearch(e.target.value)} />
+
+                        {/* Search & Category Filter (Right/Stacked on mobile) */}
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:flex-1 sm:justify-end">
+                            {/* Category Filter */}
+                            <div className="w-full sm:w-48 z-20">
+                                <Select
+                                    options={kategoris?.map(k => ({ value: k.id, label: k.nama_kategori })) || []}
+                                    value={selectedCategory}
+                                    onChange={setSelectedCategory}
+                                    isClearable
+                                    placeholder="Kategori"
+                                    className="text-sm font-medium"
+                                    styles={{
+                                        control: (base, state) => ({
+                                            ...base,
+                                            borderRadius: '0.5rem',
+                                            borderColor: state.isFocused ? '#d1d5db' : 'transparent',
+                                            backgroundColor: state.isFocused ? '#fff' : '#f9fafb',
+                                            boxShadow: 'none',
+                                            minHeight: '42px',
+                                            transition: 'all 0.2s',
+                                            '&:hover': { borderColor: '#d1d5db' }
+                                        }),
+                                        menu: (base) => ({
+                                            ...base,
+                                            zIndex: 9999,
+                                            borderRadius: '0.5rem',
+                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                            border: '1px solid #f3f4f6'
+                                        }),
+                                        option: (base, state) => ({
+                                            ...base,
+                                            backgroundColor: state.isSelected ? '#000' : (state.isFocused ? '#f3f4f6' : 'white'),
+                                            color: state.isSelected ? 'white' : '#1f2937',
+                                            fontSize: '0.875rem',
+                                            cursor: 'pointer',
+                                            padding: '10px 12px'
+                                        }),
+                                        placeholder: (base) => ({
+                                            ...base,
+                                            color: '#9ca3af',
+                                            fontSize: '0.875rem'
+                                        }),
+                                        singleValue: (base) => ({
+                                            ...base,
+                                            color: '#1f2937',
+                                            fontSize: '0.875rem',
+                                            fontWeight: 500
+                                        })
+                                    }}
+                                />
+                            </div>
+
+                            {/* Search */}
+                            <div className="relative w-full sm:w-64 group">
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-900 transition-colors" />
+                                <input type="text" placeholder="Cari produk..." className="w-full bg-gray-50 border-transparent focus:border-gray-300 focus:bg-white focus:ring-0 rounded-lg py-2 pl-9 pr-4 text-sm transition-all placeholder-gray-400 font-medium h-[42px]" value={search} onChange={(e) => setSearch(e.target.value)} />
+                            </div>
                         </div>
                     </div>
 

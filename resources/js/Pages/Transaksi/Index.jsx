@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import GeneralLayout from '@/Layouts/GeneralLayout';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -56,8 +56,28 @@ const PaymentBadge = ({ method }) => {
 };
 
 export default function Index({ transaksi, stats, filters, toko }) {
-    const { auth } = usePage().props;
+    const { auth, flash } = usePage().props;
     const [selectedTrx, setSelectedTrx] = useState(null);
+
+    // Initial Flash Check
+    useEffect(() => {
+        if (flash?.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: flash.success,
+                showConfirmButton: false,
+                timer: 1500
+            });
+        }
+        if (flash?.error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal!',
+                text: flash.error,
+            });
+        }
+    }, [flash]);
     const [showFilters, setShowFilters] = useState(false);
     const [isLoadingReceipt, setIsLoadingReceipt] = useState(false);
 
@@ -471,25 +491,67 @@ export default function Index({ transaksi, stats, filters, toko }) {
                         {/* Modal Body: List Produk */}
                         <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 custom-scrollbar">
                             <div className="space-y-4">
-                                {selectedTrx.detail?.map((detail, index) => (
-                                    <div key={index} className="flex gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
-                                        <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center">
-                                            {detail.produk?.gambar_utama ? (
-                                                <img src={`/storage/${detail.produk.gambar_utama}`} alt={detail.produk.nama_produk} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            ) : (
-                                                <PhotoIcon className="w-6 h-6 text-gray-300" />
-                                            )}
-                                            <PhotoIcon className="w-6 h-6 text-gray-300 hidden" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight mb-1">{detail.produk?.nama_produk || 'Produk Dihapus'}</p>
-                                            <div className="flex justify-between items-end">
-                                                <p className="text-xs text-gray-500">{detail.qty} x <span className="font-medium">{formatRupiah(detail.harga_satuan)}</span></p>
-                                                <p className="text-sm font-black text-gray-900">{formatRupiah(detail.subtotal)}</p>
+                                {selectedTrx.detail?.map((detail, index) => {
+                                    // Logic menentukan varian: Check varian_id first (New Logic), then fallback to price (Old Data)
+                                    let variantName = '';
+                                    const product = detail.produk;
+                                    const isBonus = Number(detail.harga_satuan) === 0;
+                                    let matchedVariant = null;
+
+                                    if (product?.varian && product.varian.length > 0) {
+                                        if (detail.varian_id) {
+                                            // Exact match by ID (New Feature)
+                                            matchedVariant = product.varian.find(v => v.id === detail.varian_id);
+                                        }
+
+                                        if (!matchedVariant) {
+                                            // Fallback: Match by Price (Old Data)
+                                            const channel = selectedTrx.channel;
+                                            matchedVariant = product.varian.find(v => {
+                                                const price = channel === 'online' ? v.harga_online : v.harga_offline;
+                                                return Number(price) === Number(detail.harga_satuan);
+                                            });
+                                        }
+
+                                        if (matchedVariant) {
+                                            variantName = `(${matchedVariant.nama_varian})`;
+                                        }
+                                    }
+
+                                    // Logic Image: prioritize variant image, fallback to product image
+                                    const imageSrc = matchedVariant?.gambar
+                                        ? `/storage/${matchedVariant.gambar}`
+                                        : (detail.produk?.gambar_utama ? `/storage/${detail.produk.gambar_utama}` : null);
+
+                                    return (
+                                        <div key={index} className="flex gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
+                                            <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center">
+                                                {imageSrc ? (
+                                                    <img src={imageSrc} alt={detail.produk?.nama_produk} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                                ) : (
+                                                    <PhotoIcon className="w-6 h-6 text-gray-300" />
+                                                )}
+                                                <PhotoIcon className="w-6 h-6 text-gray-300 hidden" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight">
+                                                        {detail.produk?.nama_produk || 'Produk Dihapus'} <span className="text-gray-500 font-normal">{variantName}</span>
+                                                    </p>
+                                                    {isBonus && (
+                                                        <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 uppercase tracking-wide">
+                                                            BONUS
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex justify-between items-end">
+                                                    <p className="text-xs text-gray-500">{detail.qty} x <span className="font-medium">{formatRupiah(detail.harga_satuan)}</span></p>
+                                                    <p className="text-sm font-black text-gray-900">{formatRupiah(detail.subtotal)}</p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -579,10 +641,30 @@ export default function Index({ transaksi, stats, filters, toko }) {
                                     <div className="flex justify-between font-bold text-gray-900">
                                         <span>
                                             {item.produk?.nama_produk}
-                                            {/* Logic Varian di Struk */}
-                                            {item.produk?.varian?.length > 1 && item.varian_id
-                                                ? ` (${item.produk.varian.find(v => v.id === item.varian_id)?.nama_varian || ''})`
-                                                : ''}
+                                            {/* Logic Varian di Struk (Match by ID then Price) */}
+                                            {(() => {
+                                                if (item.produk?.varian && item.produk.varian.length > 0) {
+                                                    let matchedVariant = null;
+
+                                                    // 1. Try match by ID
+                                                    if (item.varian_id) {
+                                                        matchedVariant = item.produk.varian.find(v => v.id === item.varian_id);
+                                                    }
+
+                                                    // 2. Fallback match by Price
+                                                    if (!matchedVariant) {
+                                                        const channel = selectedTrx.channel;
+                                                        matchedVariant = item.produk.varian.find(v => {
+                                                            const price = channel === 'online' ? v.harga_online : v.harga_offline;
+                                                            return Number(price) === Number(item.harga_satuan);
+                                                        });
+                                                    }
+
+                                                    if (matchedVariant) return ` (${matchedVariant.nama_varian})`;
+                                                }
+                                                return '';
+                                            })()}
+                                            {Number(item.harga_satuan) === 0 ? ' (BONUS)' : ''}
                                         </span>
                                     </div>
                                     <div className="flex justify-between text-gray-500 mt-0.5">

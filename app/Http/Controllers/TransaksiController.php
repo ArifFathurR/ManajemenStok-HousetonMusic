@@ -8,6 +8,7 @@ use App\Models\TransaksiDetail;
 use App\Models\Produk;
 use App\Models\ProdukVarian;
 use App\Models\Toko;
+use App\Models\Kategori;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -59,7 +60,7 @@ class TransaksiController extends Controller
         ];
 
         // Ambil Data untuk List (tambah relation & order)
-        $transaksi = $query->with(['user', 'detail.produk', 'pembayaran'])
+        $transaksi = $query->with(['user', 'detail.produk.varian', 'pembayaran'])
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
@@ -92,15 +93,18 @@ class TransaksiController extends Controller
         $tokoId = $user->toko_id;
         $toko = Toko::find($tokoId);
 
-        $produk = Produk::with('varian')
+        // Ambil kategori untuk filter filtering
+        $kategoris = Kategori::select('id', 'nama_kategori')->get();
+
+        $produk = Produk::with(['varian', 'kategoriRelasi'])
             ->where('toko_id', $tokoId)
             ->get()
             ->map(function ($item) {
                 return [
                     'id' => $item->id,
                     'nama_produk' => $item->nama_produk,
-                    'kategori' => $item->kategori,
-                    // Kirim raw path gambar dari DB
+                    // Pastikan ambil nama kategori dari relasi, fallback ke 'Umum' atau string lama
+                    'kategori' => $item->kategoriRelasi ? $item->kategoriRelasi->nama_kategori : ($item->kategori ?? 'Umum'),
                     'gambar_utama' => $item->gambar_utama,
                     'is_variant' => $item->is_variant,
                     'variants' => $item->varian->map(function ($varian) {
@@ -114,7 +118,6 @@ class TransaksiController extends Controller
                             'satuan' => $varian->satuan,
                         ];
                     }),
-                    // Data fallback jika non-varian
                     'stok' => $item->varian->first()->stok ?? 0,
                     'harga_online' => $item->varian->first()->harga_online ?? 0,
                     'harga_offline' => $item->varian->first()->harga_offline ?? 0,
@@ -124,6 +127,7 @@ class TransaksiController extends Controller
 
         return Inertia::render('Transaksi/Create', [
             'products' => $produk,
+            'kategoris' => $kategoris,
             'toko' => $toko,
             'user' => $user,
         ]);
@@ -154,11 +158,13 @@ class TransaksiController extends Controller
 
             // 1. Validasi Stok & Hitung Subtotal
             foreach ($request->cart as $item) {
-                $varianId = $item['variantId'] ?? null;
+                // Ensure front-end sends 'variantId' or 'varian_id'
+                $varianIdInCart = $item['variantId'] ?? $item['varian_id'] ?? null; 
 
-                if ($varianId) {
-                    $varian = ProdukVarian::with('produk')->find($varianId);
+                if ($varianIdInCart) {
+                    $varian = ProdukVarian::with('produk')->find($varianIdInCart);
                 } else {
+                    // Fallback: ambil varian pertama (jika produk non-varian tapi struktur DB pake varian)
                     $varian = ProdukVarian::with('produk')->where('produk_id', $item['id'])->first();
                 }
 
@@ -320,14 +326,18 @@ class TransaksiController extends Controller
         $tokoId = $user->toko_id;
         $toko = Toko::find($tokoId);
 
-        $produk = Produk::with('varian')
+        // Ambil kategori untuk filter filtering
+        $kategoris = Kategori::select('id', 'nama_kategori')->get();
+
+        $produk = Produk::with(['varian', 'kategoriRelasi'])
             ->where('toko_id', $tokoId)
             ->get()
             ->map(function ($item) {
                 return [
                     'id' => $item->id,
                     'nama_produk' => $item->nama_produk,
-                    'kategori' => $item->kategori,
+                    // Pastikan ambil nama kategori dari relasi atau fallback
+                    'kategori' => $item->kategoriRelasi ? $item->kategoriRelasi->nama_kategori : ($item->kategori ?? 'Umum'),
                     'gambar_utama' => $item->gambar_utama,
                     'is_variant' => $item->is_variant,
                     'variants' => $item->varian->map(function ($varian) {
@@ -351,6 +361,7 @@ class TransaksiController extends Controller
         return Inertia::render('Transaksi/Edit', [
             'transaksi' => $transaksi,
             'products' => $produk,
+            'kategoris' => $kategoris,
             'toko' => $toko,
             'user' => $user,
         ]);
@@ -377,37 +388,16 @@ class TransaksiController extends Controller
 
         try {
             // 1. REVERT OLD STOCK & DELETE DETAILS
+            // 1. REVERT OLD STOCK & DELETE DETAILS
             foreach ($transaksi->detail as $detail) {
-                // Cari varian yang sesuai (bisa via varian_id di detail jika ada column itu, atau via logic produk)
-                // Asumsi di TransaksiDetail ada logic untul link ke varian. 
-                // Di store method sebelumnya: 'varian_id' disimpan di detail?
-                // Cek model TransaksiDetail (kita asumsi ada varian_id atau kita cari manual)
-                
-                // Cek store method: TransaksiDetail punya 'produk_id' dan logic pengurangan stok pake $varian->decrement
-                // Kita perlu balikin stok ke varian yang tepat.
-                // Jika TransaksiDetail tidak simpan varian_id, ini agak susah jika 1 produk punya banyak varian yang sama harganya (ambigu).
-                // TAPI, di store method tadi: 'varian_id' => $varian->id disimpan ke $cartItems tapi apa masuk ke DB?
-                // Cek schema di store method: TransaksiDetail::create([...]) tidak ada varian_id di array create?
-                // TUNGGU, di store method line 257: TransaksiDetail::create tidak menyertakan varian_id! 
-                // Line 257: produk_id, qty, harga_satuan, subtotal.
-                // INI MASALAH jika produk punya varian. Kita harus fix TransaksiDetail dulu atau asumsi.
-                // NAMUN, jika sistem berjalan, varian_id mungkin sudah ada di model tapi lupa diisi di controller, ATAU logic delete saya harus smart.
-                
-                // FIX: Saya akan asumsi untuk saat ini kita balikin stok ke 'ProdukVarian' yang match dengan produk_id.
-                // Jika produk varian > 1, kita butuh info varian mana.
-                // Jika tabel detail belum punya varian_id, kita hanya bisa nebak atau balikin ke salah satu.
-                // IDEALNYA: Tambah kolom varian_id ke transaksi_detail. Tapi user minta fitur edit/hapus sekarang.
-                // Cek input store method: $cartItems[] punya 'varian_id'. 
-                // Line 257 create detail tidak simpan varian_id. 
-                // INI BUG POTENSIAL. Tapi saya akan coba restore berdasarkan produk_id saja dulu (first variant or match price?).
-                
-                // REVISI: Untuk code ini, saya akan restore ke varian pertama yg ketemu utk produk tsb atau sesuai produkId jika flat.
-                
-                $varian = ProdukVarian::where('produk_id', $detail->produk_id)->first(); 
-                // Note: ini tidak akurat 100% kalau multi-varian beli varian ke-2. 
-                // Tapi karena struktur DB detail mungkin terbatas, kita best-effort.
-                // (Saran ke user: perbaiki struktur DB detail utk simpan varian_id nanti)
-                
+                // Prioritize varian_id if available (New Feature)
+                if ($detail->varian_id) {
+                    $varian = ProdukVarian::find($detail->varian_id);
+                } else {
+                    // Fallback to product_id (Old Data)
+                    $varian = ProdukVarian::where('produk_id', $detail->produk_id)->first();
+                }
+
                 if ($varian) {
                     $varian->increment('stok', $detail->qty);
                 }
@@ -421,10 +411,11 @@ class TransaksiController extends Controller
             $cartItems = [];
 
             foreach ($request->cart as $item) {
-                $varianId = $item['variantId'] ?? null;
+                // Ensure front-end sends 'variantId' or 'varian_id'
+                $varianIdInCart = $item['variantId'] ?? $item['varian_id'] ?? null; 
 
-                if ($varianId) {
-                    $varian = ProdukVarian::with('produk')->find($varianId);
+                if ($varianIdInCart) {
+                    $varian = ProdukVarian::with('produk')->find($varianIdInCart);
                 } else {
                     $varian = ProdukVarian::with('produk')->where('produk_id', $item['id'])->first();
                 }
@@ -504,10 +495,10 @@ class TransaksiController extends Controller
                 TransaksiDetail::create([
                     'transaksi_id' => $transaksi->id,
                     'produk_id' => $item['produk_id'],
+                    'varian_id' => $item['varian_id'], // Add varian_id
                     'qty' => $item['qty'],
                     'harga_satuan' => $item['harga_satuan'],
                     'subtotal' => $item['subtotal'],
-                    // Note: Idealnya save varian_id disini jika kolomnya ada
                 ]);
                 $item['varian_obj']->decrement('stok', $item['qty']);
             }
@@ -524,13 +515,7 @@ class TransaksiController extends Controller
 
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Transaksi berhasil diperbarui!',
-                'kode_transaksi' => $transaksi->kode_transaksi,
-                'grand_total' => $grandTotal,
-                'change' => $change
-            ]);
+            return redirect()->route('transaksi.index')->with('success', 'Transaksi berhasil diperbarui!');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -545,7 +530,12 @@ class TransaksiController extends Controller
         DB::beginTransaction();
         try {
             foreach ($transaksi->detail as $detail) {
-                $varian = ProdukVarian::where('produk_id', $detail->produk_id)->first();
+                if ($detail->varian_id) {
+                    $varian = ProdukVarian::find($detail->varian_id);
+                } else {
+                    $varian = ProdukVarian::where('produk_id', $detail->produk_id)->first();
+                }
+
                 if ($varian)
                     $varian->increment('stok', $detail->qty);
             }
