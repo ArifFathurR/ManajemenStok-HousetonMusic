@@ -21,13 +21,19 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
 {
     protected $startDate;
     protected $endDate;
+    protected $channel;
+    protected $paymentMethod;
+    protected $search;
     protected $tokoId;
     protected $categories;
 
-    public function __construct($startDate, $endDate)
+    public function __construct($startDate, $endDate, $channel = 'all', $paymentMethod = 'all', $search = null)
     {
         $this->startDate = $startDate ? Carbon::parse($startDate) : Carbon::now()->startOfMonth();
         $this->endDate = $endDate ? Carbon::parse($endDate) : Carbon::now()->endOfMonth();
+        $this->channel = $channel;
+        $this->paymentMethod = $paymentMethod;
+        $this->search = $search;
         $this->tokoId = Auth::user()->toko_id;
 
         // --- UBAH DI SINI ---
@@ -41,11 +47,27 @@ class LaporanKeuanganExport implements FromCollection, WithHeadings, WithStyles,
         $data = [];
 
         // Eager load detail.produk dan pembayaran supaya hemat query
-        $transactions = Transaksi::with(['detail.produk', 'pembayaran'])
+        $query = Transaksi::with(['detail.produk', 'pembayaran'])
             ->where('toko_id', $this->tokoId)
             ->whereDate('tanggal', '>=', $this->startDate)
-            ->whereDate('tanggal', '<=', $this->endDate)
-            ->get();
+            ->whereDate('tanggal', '<=', $this->endDate);
+
+        // Filter Channel
+        if ($this->channel && $this->channel != 'all') {
+            $query->where('channel', $this->channel);
+        }
+
+        // Filter Payment Method
+        if ($this->paymentMethod && $this->paymentMethod != 'all') {
+            $query->where('metode_pembayaran', $this->paymentMethod);
+        }
+
+        // Filter Search (Kode Transaksi)
+        if ($this->search) {
+            $query->where('kode_transaksi', 'like', '%' . $this->search . '%');
+        }
+
+        $transactions = $query->get();
 
         foreach ($period as $date) {
             $currentDate = $date->format('Y-m-d');

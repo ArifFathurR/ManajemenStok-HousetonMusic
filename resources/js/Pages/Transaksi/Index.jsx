@@ -86,6 +86,7 @@ export default function Index({ transaksi, stats, filters, toko }) {
         payment_method: filters.payment_method || 'all',
         start_date: filters.start_date || '',
         end_date: filters.end_date || '',
+        search: filters.search || ''
     });
 
     const handleFilter = (key, value) => {
@@ -100,18 +101,19 @@ export default function Index({ transaksi, stats, filters, toko }) {
     };
 
     const resetFilter = () => {
-        setFilterValues({ channel: 'all', payment_method: 'all', start_date: '', end_date: '' });
+        setFilterValues({ channel: 'all', payment_method: 'all', start_date: '', end_date: '', search: '' });
         router.get(route('transaksi.index'), {}, { preserveState: true });
     };
 
     const handleExport = () => {
         // Build query params manual agar bisa buka tab baru/download langsung
+        // Gunakan filters prop agar selalu sync dengan URL (termasuk search)
         const params = new URLSearchParams({
-            start_date: filterValues.start_date,
-            end_date: filterValues.end_date,
-            // Opsional: kirim filter lain jika controller mendukung filter saat export
-            channel: filterValues.channel,
-            payment_method: filterValues.payment_method
+            start_date: filters.start_date || '',
+            end_date: filters.end_date || '',
+            channel: filters.channel || 'all',
+            payment_method: filters.payment_method || 'all',
+            search: filters.search || ''
         }).toString();
 
         window.location.href = route('transaksi.export') + '?' + params;
@@ -454,19 +456,32 @@ export default function Index({ transaksi, stats, filters, toko }) {
                     )}
 
                     {/* Pagination */}
-                    {transaksi.links.length > 3 && (
-                        <div className="flex justify-center p-6 border-t border-gray-100 bg-gray-50/30">
+                    <div className="flex flex-col md:flex-row justify-between items-center p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 gap-4">
+                        <div className="text-xs text-gray-500 font-medium">
+                            Menampilkan <span className="font-bold text-gray-900">{transaksi.from || 0}</span> sampai <span className="font-bold text-gray-900">{transaksi.to || 0}</span> dari <span className="font-bold text-gray-900">{transaksi.total || 0}</span> transaksi
+                        </div>
+
+                        {transaksi.links && transaksi.links.length > 3 && (
                             <div className="flex gap-1 flex-wrap justify-center">
                                 {transaksi.links.map((link, key) => (
                                     link.url ? (
-                                        <button key={key} onClick={() => router.get(link.url, filterValues, { preserveState: true, preserveScroll: true })} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${link.active ? 'bg-black text-white shadow-md transform scale-105' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'}`} dangerouslySetInnerHTML={{ __html: link.label }} />
+                                        <button
+                                            key={key}
+                                            onClick={() => router.get(link.url, filterValues, { preserveState: true, preserveScroll: true })}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${link.active ? 'bg-black text-white shadow-md transform scale-105' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'}`}
+                                            dangerouslySetInnerHTML={{ __html: link.label }}
+                                        />
                                     ) : (
-                                        <span key={key} className="px-3 py-1.5 text-xs text-gray-300" dangerouslySetInnerHTML={{ __html: link.label }} />
+                                        <span
+                                            key={key}
+                                            className="px-3 py-1.5 text-xs text-gray-300 border border-transparent"
+                                            dangerouslySetInnerHTML={{ __html: link.label }}
+                                        />
                                     )
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
 

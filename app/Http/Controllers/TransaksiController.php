@@ -61,8 +61,8 @@ class TransaksiController extends Controller
 
         // Ambil Data untuk List (tambah relation & order)
         $transaksi = $query->with(['user', 'detail.produk.varian', 'pembayaran'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+            ->paginate(5)
+            ->appends($request->query());
 
         $toko = Toko::find($tokoId);
 
@@ -81,7 +81,11 @@ class TransaksiController extends Controller
 
         $fileName = 'Laporan_Keuangan_' . ($startDate ?? 'Semua') . '_sd_' . ($endDate ?? 'Semua') . '.xlsx';
 
-        return Excel::download(new LaporanKeuanganExport($startDate, $endDate), $fileName);
+        $channel = $request->channel;
+        $paymentMethod = $request->payment_method;
+        $search = $request->search;
+
+        return Excel::download(new LaporanKeuanganExport($startDate, $endDate, $channel, $paymentMethod, $search), $fileName);
     }
 
     /**
